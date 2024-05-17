@@ -51,7 +51,7 @@ contract Counter {
 the following command outputs the transaction data you would need to send to
 deploy the contract.
 
-```terminal
+```sh
 $ koba generate --sol path_to_sol --wasm path_to_wasm
 6080604052348015600e575f80fd5b...d81f197cb0f070175cce2fd57095700201
 ```
@@ -59,7 +59,7 @@ $ koba generate --sol path_to_sol --wasm path_to_wasm
 You can then use `cast` for example to deploy and activate the contract, like
 this:
 
-```terminal
+```sh
 # Deploy the contract.
 cast send --rpc-url https://stylusv2.arbitrum.io/rpc --private-key <private-key> --create <koba output>
 
@@ -67,7 +67,11 @@ cast send --rpc-url https://stylusv2.arbitrum.io/rpc --private-key <private-key>
 cast send --rpc-url https://stylusv2.arbitrum.io/rpc --private-key <private-key> --value "0.0001ether" 0x0000000000000000000000000000000000000071 "activateProgram(address)(uint16,uint256)" <contract address>
 
 # Interact with the contract
-cast call --rpc-url https://stylusv2.arbitrum.io/rpc <contract address> "number()" # 5
+cast call --rpc-url https://stylusv2.arbitrum.io/rpc <contract address> "number()"
+0x0000000000000000000000000000000000000000000000000000000000000005
+
 cast send --rpc-url https://stylusv2.arbitrum.io/rpc --private-key <private-key> <contract address> "increment()"
-cast storage --rpc-url https://stylusv2.arbitrum.io/rpc <contract address> 0 # 6
+
+cast storage --rpc-url https://stylusv2.arbitrum.io/rpc <contract address> 0
+0x0000000000000000000000000000000000000000000000000000000000000006
 ```
