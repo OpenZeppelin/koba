@@ -1,0 +1,16 @@
+[package]
+name = "koba"
+version = "0.1.0"
+edition = "2021"
+authors = ["Alexander Gonzalez <alexfertel97@gmail.com>"]
+
+[dependencies]
+brotli2 = "0.3.2"
+clap = { version = "4.5.4", features = ["derive"] }
+eyre = { version = "0.6", default-features = false, features = [
+  "auto-install",
+  "track-caller",
+] }
+hex = "0.4.3"
+tempfile = "3.10.1"
+wasmer = "3.1.0"
