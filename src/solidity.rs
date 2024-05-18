@@ -2,6 +2,9 @@ use std::{mem::size_of, ops::Shr, path::Path, process::Command};
 
 use eyre::{bail, OptionExt};
 
+// PUSH32 (1 byte) + 32 bytes
+const SHIFT_RIGHT: usize = 33;
+
 pub struct Binary {
     pub prelude: Vec<u8>,
     pub code: Vec<u8>,
@@ -41,16 +44,57 @@ fn run_solc(file_path: impl AsRef<Path>, kind: BinaryKind) -> eyre::Result<Strin
         .map(|s| s.to_owned())
 }
 
-pub fn amend(binary: Binary, wasm_length: usize) -> eyre::Result<Binary> {
-    let prelude_length = binary.prelude.len();
-    let binary = amend_clen(binary, wasm_length)?;
-    let binary = amend_plen(binary, prelude_length)?;
+pub fn amend(binary: Binary, wasm_length: usize, args_length: usize) -> eyre::Result<Binary> {
+    let prelude = binary.prelude.clone();
+    let prelude_push_instruction = get_push_with(prelude.len());
+    let runtime_push_instruction = get_push_with(binary.code.len());
+    let binary_push_instruction = get_push_with(prelude.len() + binary.code.len());
 
-    Ok(binary)
+    let prelude_indices = find_all_instructions(&prelude, &prelude_push_instruction);
+    if prelude_indices.len() == 0 {
+        bail!("constructor bytecode is malformed: did not find prelude length");
+    }
+    let runtime_indices = find_all_instructions(&prelude, &runtime_push_instruction);
+    if runtime_indices.len() == 0 {
+        bail!("constructor bytecode is malformed: did not find runtime length");
+    }
+    let binary_indices = find_all_instructions(&prelude, &binary_push_instruction);
+
+    let prelude_instructions_size = prelude_push_instruction.len() * prelude_indices.len();
+    let runtime_instructions_size = runtime_push_instruction.len() * runtime_indices.len();
+    let binary_instructions_size = binary_push_instruction.len() * binary_indices.len();
+    let shift_left =
+        prelude_instructions_size + runtime_instructions_size + binary_instructions_size;
+
+    let total_indices = prelude_indices.len() + runtime_indices.len() + binary_indices.len();
+    let new_prelude_length = prelude.len() - shift_left + SHIFT_RIGHT * total_indices;
+
+    let prelude = amend_prelude(
+        prelude,
+        &prelude_indices,
+        &prelude_push_instruction,
+        new_prelude_length,
+    );
+    let prelude = amend_prelude(
+        prelude,
+        &runtime_indices,
+        &runtime_push_instruction,
+        wasm_length,
+    );
+    let prelude = amend_prelude(
+        prelude,
+        &binary_indices,
+        &binary_push_instruction,
+        new_prelude_length + wasm_length + args_length,
+    );
+
+    Ok(Binary {
+        prelude,
+        code: binary.code,
+    })
 }
 
-fn amend_clen(binary: Binary, wasm_length: usize) -> eyre::Result<Binary> {
-    let length = binary.code.len();
+fn get_push_with(length: usize) -> Vec<u8> {
     let byte_count = filled_bytes(length);
     let push0_opcode = 95;
     let push_opcode = push0_opcode + byte_count;
@@ -61,82 +105,36 @@ fn amend_clen(binary: Binary, wasm_length: usize) -> eyre::Result<Binary> {
     let mut push_instruction = vec![0u8; byte_count + 1];
     push_instruction[0] = push_opcode;
     push_instruction[1..].copy_from_slice(&length_bytes[start_byte..]);
-
-    let mut prelude = binary.prelude.clone();
-    let indices = prelude
-        .windows(push_instruction.len())
-        .enumerate()
-        .filter(|(_, w)| *w == push_instruction)
-        .map(|(offset, _)| offset + push_instruction.len())
-        .collect::<Vec<_>>();
-
-    if indices.len() == 0 {
-        bail!("constructor bytecode is malformed: did not find binary length");
-    }
-
-    // PUSH32 (1 byte) + 32 bytes - (PUSH1 (1 byte) + 1 byte).
-    let shift = 31;
-    for (idx, offset) in indices.into_iter().enumerate() {
-        // Take into account shifts from previous prelude modifications.
-        let offset = offset + idx * shift;
-        let suffix = prelude.split_off(offset);
-        let prefix_length = prelude.len() - push_instruction.len();
-        prelude = prelude.into_iter().take(prefix_length).collect::<Vec<u8>>();
-        prelude.push(0x7f); // PUSH32
-        prelude.extend(bytes32_from_usize(wasm_length));
-        prelude.extend(&suffix);
-    }
-
-    Ok(Binary {
-        prelude,
-        code: binary.code,
-    })
+    push_instruction
 }
 
-fn amend_plen(binary: Binary, prelude_length: usize) -> eyre::Result<Binary> {
-    let length = prelude_length;
-    let byte_count = filled_bytes(length);
-    let push0_opcode = 95;
-    let push_opcode = push0_opcode + byte_count;
-
-    let byte_count = byte_count as usize;
-    let length_bytes = length.to_be_bytes();
-    let start_byte = length_bytes.len() - byte_count;
-    let mut push_instruction = vec![0u8; byte_count + 1];
-    push_instruction[0] = push_opcode;
-    push_instruction[1..].copy_from_slice(&length_bytes[start_byte..]);
-
-    let mut prelude = binary.prelude.clone();
-    let indices = prelude
-        .windows(push_instruction.len())
+fn find_all_instructions(prelude: &[u8], instruction: &[u8]) -> Vec<usize> {
+    prelude
+        .windows(instruction.len())
         .enumerate()
-        .filter(|(_, w)| *w == push_instruction)
-        .map(|(offset, _)| offset + push_instruction.len())
-        .collect::<Vec<_>>();
+        .filter(|(_, w)| *w == instruction)
+        .map(|(offset, _)| offset + instruction.len())
+        .collect::<Vec<_>>()
+}
 
-    if indices.len() == 0 {
-        bail!("constructor bytecode is malformed: could not find prelude length");
-    }
-
-    // PUSH32 (1 byte) + 32 bytes - (PUSH1 (1 byte) + 1 byte).
-    let shift = 31;
-    let new_prefix_length =
-        prelude.len() - push_instruction.len() * indices.len() + shift * indices.len();
+fn amend_prelude(
+    mut prelude: Vec<u8>,
+    indices: &[usize],
+    instruction: &[u8],
+    length: usize,
+) -> Vec<u8> {
     for (idx, offset) in indices.into_iter().enumerate() {
         // Take into account shifts from previous prelude modifications.
-        let offset = offset + idx * shift;
+        let offset = offset + idx * SHIFT_RIGHT;
         let suffix = prelude.split_off(offset);
-        let prefix_length = prelude.len() - push_instruction.len();
+        let prefix_length = prelude.len() - instruction.len();
         prelude = prelude.into_iter().take(prefix_length).collect::<Vec<u8>>();
         prelude.push(0x7f); // PUSH32
-        prelude.extend(bytes32_from_usize(new_prefix_length));
+        prelude.extend(bytes32_from_usize(length));
         prelude.extend(&suffix);
     }
 
-    Ok(Binary {
-        prelude,
-        code: binary.code,
-    })
+    prelude
 }
 
 fn filled_bytes(mut n: usize) -> u8 {
@@ -154,4 +152,25 @@ fn bytes32_from_usize(n: usize) -> [u8; 32] {
     let size = size_of::<usize>();
     bytes[32 - size..].copy_from_slice(&n.to_be_bytes());
     bytes
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::{amend, Binary};
+
+    #[test]
+    fn amends_ctr_no_arguments() {
+        let prelude =
+            hex::decode("6080604052348015600e575f80fd5b5060055f55603e80601e5f395ff3fe").unwrap();
+        let runtime = hex::decode("60806040525f80fdfea26469706673582212201930c24a9bacd514d80b227d7f262dc1678997d986b05b354f9d092c2fcaee5864736f6c63430008150033").unwrap();
+        let binary = Binary {
+            prelude,
+            code: runtime,
+        };
+
+        let binary = amend(binary, 3388, 0).unwrap();
+        let expected = hex::decode("6080604052348015600e575f80fd5b5060055f557f0000000000000000000000000000000000000000000000000000000000000d3c807f000000000000000000000000000000000000000000000000000000000000005c5f395ff3fe").unwrap();
+        assert_eq!(expected, binary.prelude);
+    }
 }
