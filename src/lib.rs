@@ -14,10 +14,10 @@ pub fn generate(config: &config::Generate) -> eyre::Result<()> {
 
     let binary = solidity::compile(&config.sol)?;
     let wasm = wasm::compress(&config.wasm)?;
-    let binary = solidity::amend(binary, wasm.len(), args.len())?;
-    let init_code = [binary.prelude, wasm, args].concat();
+    let binary = solidity::amend(binary, wasm.len())?;
 
-    println!("{}", hex::encode(init_code.clone()));
+    let init_code = [binary.prelude, wasm, args].concat();
+    println!("{}", hex::encode(init_code));
 
     Ok(())
 }
