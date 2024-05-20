@@ -5,7 +5,7 @@ Generate deployment transaction data for Stylus contracts.
 > [!WARNING]
 > This project is still in a very early and experimental phase. It has never
 > been audited nor thoroughly reviewed for security vulnerabilities. Do not use
-> in production. Currently only works for a small subset of compiler outputs.
+> in production.
 
 ## Usage
 
@@ -75,13 +75,3 @@ cast send --rpc-url https://stylusv2.arbitrum.io/rpc --private-key <private-key>
 cast storage --rpc-url https://stylusv2.arbitrum.io/rpc <contract address> 0
 0x0000000000000000000000000000000000000000000000000000000000000006
 ```
-
-## Failure Cases
-
-Currently, when there is a jump instruction gets executed with an argument that
-was not pushed immediately before, the generated init_code fails to run.
-
-The problem arises because we are doing passes over the bytecode without
-actually emulating the stack, so there may be an arbitrary number of
-instructions between a destination offset being computed, and it being used by
-a jump instruction.
