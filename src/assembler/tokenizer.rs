@@ -47,7 +47,7 @@ impl Token {
         match self {
             Token::Opcode(_) => 1,
             Token::Constant(c) => c.len() / 2,
-            Token::Builtin(_) => 32, // PUSH + 32 bytes,
+            Token::Builtin(_) => 33, // PUSH + 32 bytes,
             Token::Operator(_) | Token::LabelBegin(_) | Token::LabelEnd => 0,
         }
     }
@@ -151,10 +151,7 @@ fn tokenize_auxdata(instruction: &str) -> Option<Vec<Token>> {
     }
 
     let data = instruction.chars().skip(prefix.len()).collect::<String>();
-    Some(vec![
-        Token::opcode(opcode("INVALID").unwrap()),
-        Token::constant(data[2..].to_owned()),
-    ])
+    Some(vec![Token::constant(data[2..].to_owned())])
 }
 
 fn tokenize_operator(instruction: &str) -> Option<Vec<Token>> {

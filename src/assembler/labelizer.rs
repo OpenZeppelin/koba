@@ -17,7 +17,6 @@ pub fn labelize(stream: &[Token]) -> Vec<Token> {
     let mut index = 0;
     let label_size = estimate_max_label_size(stream);
     for token in stream {
-        println!("{:x}: {:?}", index, token);
         match token {
             Token::LabelBegin(name) => {
                 stack.push(Label {
@@ -44,13 +43,17 @@ pub fn labelize(stream: &[Token]) -> Vec<Token> {
                 );
             }
             Token::Opcode(_) | Token::Constant(_) => index += token.size(),
-            Token::Operator(_) => {
+            Token::Operator(operator) if operator.name == "dataOffset" => {
                 index += 1; // A PUSH instruction.
                 index += label_size;
             }
+            Token::Operator(_) => {
+                index += 1; // A PUSH instruction.
+                index += 32; // We can't know datasize here.
+            }
             Token::Builtin(_) => {
                 index += 1; // A PUSH instruction.
-                index += token.size()
+                index += token.size() - 1
             }
         }
     }
@@ -69,16 +72,10 @@ pub fn labelize(stream: &[Token]) -> Vec<Token> {
                     "dataOffset" => {
                         let label_size = label_size + label_size % 2;
                         let constant = &format!("{:0width$x}", label.index, width = label_size);
-                        println!("{}: {} | {}", operator.arg, constant, label_size);
                         push_constant(&constant)
                     }
                     "dataSize" => {
-                        let label_size = label_size + label_size % 2;
-                        let constant = &format!("{:0width$x}", label.size, width = label_size);
-                        println!(
-                            "{}: {} | {} | {}",
-                            operator.arg, constant, label_size, label.size
-                        );
+                        let constant = &format!("{:0width$x}", label.size, width = 64);
                         push_constant(&constant)
                     }
                     _ => unreachable!(),
@@ -92,9 +89,35 @@ pub fn labelize(stream: &[Token]) -> Vec<Token> {
         })
         .flatten()
         .collect::<Vec<_>>();
-    println!("{:?}", stream);
 
-    let bytecode_size: usize = stream.iter().map(|t| t.size()).sum();
+    let bytecode_size: usize = stream
+        .iter()
+        .map(|t| match t {
+            Token::Opcode(_) | Token::Constant(_) | Token::Builtin(_) => t.size(),
+            Token::Operator(operator) => {
+                // TODO: Maybe make this fallible?
+                let label = labels
+                    .get(&operator.arg)
+                    .expect(&format!("Label '{}' not found", operator.arg));
+
+                let size = match operator.name.as_ref() {
+                    "dataOffset" => {
+                        let label_size = label_size + label_size % 2;
+                        let constant = &format!("{:0width$x}", label.index, width = label_size);
+                        1 + constant.len() / 2
+                    }
+                    "dataSize" => {
+                        let constant = &format!("{:0width$x}", label.size, width = 64);
+                        1 + constant.len() / 2
+                    }
+                    _ => unreachable!(),
+                };
+
+                size
+            }
+            Token::LabelBegin(_) | Token::LabelEnd => 0,
+        })
+        .sum();
 
     stream
         .into_iter()
