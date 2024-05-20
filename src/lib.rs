@@ -1,23 +1,25 @@
 pub mod config;
 pub use config::run;
 
+mod assembler;
 mod solidity;
 mod wasm;
 
 pub fn generate(config: &config::Generate) -> eyre::Result<()> {
+    let evmasm = solidity::assembly(&config.sol)?;
+    let wasm = wasm::compress(&config.wasm)?;
+    let asm = assembler::compile(&evmasm, &wasm)?;
+
     let args = config
         .args
         .iter()
         .map(|a| hex::decode(a))
         .collect::<Result<Vec<_>, _>>()?
         .concat();
+    let args = hex::encode(args);
 
-    let binary = solidity::compile(&config.sol)?;
-    let wasm = wasm::compress(&config.wasm)?;
-    let binary = solidity::amend(binary, wasm.len())?;
-
-    let init_code = [binary.prelude, wasm, args].concat();
-    println!("{}", hex::encode(init_code));
+    let init_code = format!("{asm}{args}");
+    println!("{}", init_code);
 
     Ok(())
 }

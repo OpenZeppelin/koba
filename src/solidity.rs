@@ -1,4 +1,4 @@
-use std::{mem::size_of, ops::Shr, path::Path, process::Command};
+use std::{io::BufRead, mem::size_of, ops::Shr, path::Path, process::Command};
 
 use eyre::{bail, OptionExt};
 
@@ -49,6 +49,25 @@ fn run_solc(file_path: impl AsRef<Path>, kind: BinaryKind) -> eyre::Result<Strin
         .last()
         .ok_or_eyre("compiler output is empty")
         .map(|s| s.to_owned())
+}
+
+pub fn assembly(sol_path: impl AsRef<Path>) -> eyre::Result<String> {
+    let output = Command::new("solc")
+        .arg(sol_path.as_ref())
+        .arg("--asm")
+        .arg("--optimize")
+        .output()?;
+    let code = String::from_utf8_lossy(&output.stdout);
+    let code = code
+        .to_string()
+        .lines()
+        .skip_while(|l| !l.contains("EVM"))
+        // Also skip the line containing `EVM`.
+        .skip(1)
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    Ok(code)
 }
 
 pub fn amend(binary: Binary, wasm_length: usize) -> eyre::Result<Binary> {
