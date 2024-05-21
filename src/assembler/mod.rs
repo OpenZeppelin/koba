@@ -5,7 +5,7 @@ mod tokenizer;
 pub use instruction::{instruction, opcode};
 
 pub fn compile(evmasm: &str, wasm: &[u8]) -> eyre::Result<String> {
-    let evmasm = tokenizer::amend(evmasm, wasm);
+    let evmasm = tokenizer::amend(evmasm, &wasm);
     let bytecode = codegen(&evmasm)?;
     Ok(hex::encode(bytecode))
 }
@@ -196,7 +196,7 @@ dup5
       }      
     "##;
 
-        let expected = "6080604052348015600e575f80fd5b507f000000000000000000000000000000000000000000000000000000000000009d8060395f395ff3fe6080604052366030575f808182833473a6014eee4c8316f19e89e721a0e46dd0704201fa5af1602c578081fd5b8081f35b5f368182378081368384733323b6c94847d1cf98aae1ac0a1d745d3af91e5e5af2602c578081fda164736f6c6343000807000a";
+        let expected = "608060405234801561000f575f80fd5b507f00000000000000000000000000000000000000000000000000000000000000a28061003b5f395ff3fe608060405236610032575f808182833473a6014eee4c8316f19e89e721a0e46dd0704201fa5af161002e578081fd5b8081f35b5f368182378081368384733323b6c94847d1cf98aae1ac0a1d745d3af91e5e5af261002e578081fda164736f6c6343000807000a";
         let actual = hex::encode(codegen(asm).unwrap());
         assert_eq!(expected, actual);
     }

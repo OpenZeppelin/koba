@@ -1,3 +1,5 @@
+use std::mem;
+
 use eyre::bail;
 use once_cell::sync::Lazy;
 use regex::{Regex, RegexBuilder};
@@ -47,7 +49,7 @@ impl Token {
         match self {
             Token::Opcode(_) => 1,
             Token::Constant(c) => c.len() / 2,
-            Token::Builtin(_) => 33, // PUSH + 32 bytes,
+            Token::Builtin(_) => 33, // PUSH + 32 bytes.
             Token::Operator(_) | Token::LabelBegin(_) | Token::LabelEnd => 0,
         }
     }
@@ -176,19 +178,74 @@ fn tokenize_call(instruction: &str) -> Option<Vec<Token>> {
 
     if let Some(captures) = FUNCTION_CALL.captures(instruction) {
         let f = tokenize_part(&captures[1]);
-        let params = tokenize_params(&captures[2]);
+        let args = tokenize_args(&captures[2]);
 
-        return Some([params, f].concat());
+        return Some([args, f].concat());
     }
 
     None
 }
 
-fn tokenize_params(params: &str) -> Vec<Token> {
-    static COMMA_SPACE: Lazy<Regex> = Lazy::new(|| Regex::new(r",\s*").unwrap());
+fn tokenize_args(args: &str) -> Vec<Token> {
+    // Simple case: no nested arguments.
+    if !args.contains('(') {
+        static COMMA_SPACE: Lazy<Regex> = Lazy::new(|| Regex::new(r",\s*").unwrap());
+        let args: Vec<&str> = COMMA_SPACE.split(args).collect();
+        return args.into_iter().rev().flat_map(tokenize_part).collect();
+    }
 
-    let params: Vec<&str> = COMMA_SPACE.split(params).collect();
-    params.into_iter().rev().flat_map(tokenize_part).collect()
+    let mut tokens = vec![];
+
+    let args = args.chars().collect::<Vec<char>>();
+
+    let mut i = 0;
+    let mut current = String::new();
+    while i < args.len() {
+        match args[i] {
+            ',' => {
+                if !current.is_empty() {
+                    tokens.extend(tokenize_part(&mem::take(&mut current)));
+                }
+                i += 1;
+            }
+            '(' => {
+                let opcode = tokenize_part(&mem::take(&mut current));
+                let mut inner = vec![];
+                i += 1;
+                let mut parens = 1;
+                loop {
+                    match args[i] {
+                        '(' => parens += 1,
+                        ')' => parens -= 1,
+                        _ => {}
+                    }
+                    if args[i] == ')' && parens == 0 {
+                        i += 1;
+                        break;
+                    }
+                    inner.push(args[i]);
+                    i += 1;
+                }
+
+                let inner: String = inner[..inner.len()].into_iter().collect();
+                tokens.extend(tokenize_args(&inner));
+                tokens.extend(opcode);
+                current.clear();
+            }
+            c => {
+                current.push(c);
+                i += 1;
+            }
+        }
+    }
+
+    if !current.is_empty() {
+        let mut t = tokenize_part(&current);
+        t.extend(tokens);
+        tokens = t;
+    }
+
+    tokens
 }
 
 fn tokenize_label(instruction: &str) -> Option<Vec<Token>> {
@@ -326,14 +383,14 @@ tag_3:"##;
 
     #[test]
     fn calls() {
-        let actual = tokenize(vec!["mstore(0x40, 0x80)".to_owned()]);
+        let actual = tokenize(vec!["mstore(0x40,0x80)".to_owned()]);
         let mut expected = vec![];
         expected.extend(push_constant("80"));
         expected.extend(push_constant("40"));
         expected.push(Token::opcode(opcode("mstore").unwrap()));
         assert_eq!(expected, actual);
 
-        let actual = tokenize(vec!["calldatacopy(0x1, 0x2, calldatasize)".to_owned()]);
+        let actual = tokenize(vec!["calldatacopy(0x1,0x2,calldatasize)".to_owned()]);
         let mut expected = vec![];
         expected.push(Token::opcode(opcode("calldatasize").unwrap()));
         expected.extend(push_constant("02"));
@@ -367,6 +424,17 @@ tag_3:"##;
         expected.extend(push_constant("80"));
         expected.extend(push_constant("40"));
         expected.push(Token::opcode(opcode("mstore").unwrap()));
+        assert_eq!(expected, actual);
+
+        let stream = "0x1e4fbdf700000000000000000000000000000000000000000000000000000000"
+            .split_whitespace()
+            .map(|t| t.to_owned())
+            .collect();
+        let actual = tokenize(stream);
+        let mut expected = vec![];
+        expected.extend(push_constant(
+            "1e4fbdf700000000000000000000000000000000000000000000000000000000",
+        ));
         assert_eq!(expected, actual);
     }
 
@@ -430,6 +498,50 @@ tag_3:"##;
         expected.push(Token::opcode(opcode("jumpdest").unwrap()));
         expected.push(Token::opcode(opcode("dup3").unwrap()));
         expected.push(Token::opcode(opcode("dup4").unwrap()));
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn tokenizes_nested_args() {
+        let stream = "sub(shl(0xa0,0x02),0x01)"
+            .split_whitespace()
+            .map(|t| t.to_owned())
+            .collect();
+        let actual = tokenize(stream);
+        let mut expected = vec![];
+        expected.extend(push_constant("01"));
+        expected.extend(push_constant("02"));
+        expected.extend(push_constant("a0"));
+        expected.push(Token::opcode(opcode("shl").unwrap()));
+        expected.push(Token::opcode(opcode("sub").unwrap()));
+        assert_eq!(expected, actual);
+
+        let stream = "sub(codecopy(0xa0,0x02,0x03),0x01)"
+            .split_whitespace()
+            .map(|t| t.to_owned())
+            .collect();
+        let actual = tokenize(stream);
+        let mut expected = vec![];
+        expected.extend(push_constant("01"));
+        expected.extend(push_constant("03"));
+        expected.extend(push_constant("02"));
+        expected.extend(push_constant("a0"));
+        expected.push(Token::opcode(opcode("codecopy").unwrap()));
+        expected.push(Token::opcode(opcode("sub").unwrap()));
+        assert_eq!(expected, actual);
+
+        let stream = "not(sub(shl(0xa0,0x02),0x01))"
+            .split_whitespace()
+            .map(|t| t.to_owned())
+            .collect();
+        let actual = tokenize(stream);
+        let mut expected = vec![];
+        expected.extend(push_constant("01"));
+        expected.extend(push_constant("02"));
+        expected.extend(push_constant("a0"));
+        expected.push(Token::opcode(opcode("shl").unwrap()));
+        expected.push(Token::opcode(opcode("sub").unwrap()));
+        expected.push(Token::opcode(opcode("not").unwrap()));
         assert_eq!(expected, actual);
     }
 }

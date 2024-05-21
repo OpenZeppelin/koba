@@ -70,8 +70,7 @@ pub fn labelize(stream: &[Token]) -> Vec<Token> {
 
                 let tokens = match operator.name.as_ref() {
                     "dataOffset" => {
-                        let label_size = label_size + label_size % 2;
-                        let constant = &format!("{:0width$x}", label.index, width = label_size);
+                        let constant = &format!("{:0width$x}", label.index, width = label_size * 2);
                         push_constant(constant)
                     }
                     "dataSize" => {
@@ -101,8 +100,7 @@ pub fn labelize(stream: &[Token]) -> Vec<Token> {
 
                 let size = match operator.name.as_ref() {
                     "dataOffset" => {
-                        let label_size = label_size + label_size % 2;
-                        let constant = &format!("{:0width$x}", label.index, width = label_size);
+                        let constant = &format!("{:0width$x}", label.index, width = label_size * 2);
                         1 + constant.len() / 2
                     }
                     "dataSize" => {
@@ -137,7 +135,17 @@ pub fn labelize(stream: &[Token]) -> Vec<Token> {
 /// That is, how many hex digits do we need to represent all the addressable
 /// contract offsets, including labels.
 fn estimate_max_label_size(stream: &[Token]) -> usize {
-    let contract_size_without_labels: usize = stream.iter().map(|t| t.size()).sum();
+    let contract_size_without_labels: usize = stream
+        .iter()
+        .take(stream.len() - 2) // Skip runtime.
+        .map(|t| match t {
+            // We patch here to compute roughly correct label sizes while
+            // defending against the worst case: it can't happen that we
+            // undercount because then jump offsets won't be computed correctly.
+            Token::Operator(_) => 33,
+            _ => t.size(),
+        })
+        .sum();
     let label_count = stream
         .iter()
         .filter(|t| matches!(t, Token::Operator(_)))
@@ -155,7 +163,7 @@ fn estimate_max_label_size(stream: &[Token]) -> usize {
             return hex_digits / 2;
         }
 
-        hex_digits += 1;
+        hex_digits += 2;
     }
 
     max_label_size / 2
@@ -163,140 +171,213 @@ fn estimate_max_label_size(stream: &[Token]) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use crate::assembler::tokenizer::Token;
-    use crate::assembler::{opcode, tokenizer::Operator};
+    use crate::assembler::tokenizer;
 
     use super::estimate_max_label_size;
 
-    macro_rules! op {
-        ($op: literal) => {
-            Token::opcode(opcode($op).unwrap())
-        };
-    }
-
-    macro_rules! constant {
-        ($c: literal) => {
-            Token::Constant($c.to_owned())
-        };
-    }
-
-    macro_rules! label_begin {
-        ($c: literal) => {
-            Token::LabelBegin($c.to_owned())
-        };
-    }
-
     #[test]
     fn estimates_max_label_size() {
-        let stream = [
-            op!("push1"),
-            constant!("80"),
-            op!("push1"),
-            constant!("40"),
-            op!("mstore"),
-            op!("callvalue"),
-            op!("dup1"),
-            op!("iszero"),
-            Token::Operator(Operator {
-                name: "dataOffset".to_owned(),
-                arg: "tag_1".to_owned(),
-            }),
-            op!("jumpi"),
-            op!("push0"),
-            op!("dup1"),
-            op!("revert"),
-            label_begin!("tag_1"),
-            Token::LabelEnd,
-            op!("jumpdest"),
-            op!("pop"),
-            op!("push1"),
-            constant!("40"),
-            op!("mload"),
-            Token::Builtin("bytecodeSize".to_owned()),
-            op!("codesize"),
-            op!("sub"),
-            op!("dup1"),
-            Token::Builtin("bytecodeSize".to_owned()),
-            op!("dup4"),
-            op!("codecopy"),
-            op!("dup2"),
-            op!("add"),
-            op!("push1"),
-            constant!("40"),
-            op!("dup2"),
-            op!("swap1"),
-            op!("mstore"),
-            Token::Operator(Operator {
-                name: "dataOffset".to_owned(),
-                arg: "tag_2".to_owned(),
-            }),
-            op!("swap2"),
-            Token::Operator(Operator {
-                name: "dataOffset".to_owned(),
-                arg: "tag_3".to_owned(),
-            }),
-            op!("jump"),
-            label_begin!("tag_2"),
-            Token::LabelEnd,
-            op!("jumpdest"),
-            op!("push0"),
-            op!("sstore"),
-            Token::Operator(Operator {
-                name: "dataOffset".to_owned(),
-                arg: "tag_7".to_owned(),
-            }),
-            op!("jump"),
-            label_begin!("tag_3"),
-            Token::LabelEnd,
-            op!("jumpdest"),
-            op!("push0"),
-            op!("push1"),
-            constant!("20"),
-            op!("dup3"),
-            op!("dup5"),
-            op!("sub"),
-            op!("slt"),
-            op!("iszero"),
-            Token::Operator(Operator {
-                name: "dataOffset".to_owned(),
-                arg: "tag_9".to_owned(),
-            }),
-            op!("jumpi"),
-            op!("push0"),
-            op!("dup1"),
-            op!("revert"),
-            label_begin!("tag_9"),
-            Token::LabelEnd,
-            op!("jumpdest"),
-            op!("pop"),
-            op!("mload"),
-            op!("swap2"),
-            op!("swap1"),
-            op!("pop"),
-            op!("jump"),
-            label_begin!("tag_7"),
-            Token::LabelEnd,
-            op!("jumpdest"),
-            Token::Operator(Operator {
-                name: "dataSize".to_owned(),
-                arg: "sub_0".to_owned(),
-            }),
-            op!("dup1"),
-            Token::Operator(Operator {
-                name: "dataOffset".to_owned(),
-                arg: "sub_0".to_owned(),
-            }),
-            op!("push0"),
-            op!("codecopy"),
-            op!("push0"),
-            op!("return"),
-            op!("stop"),
-            label_begin!("sub_0"),
-            constant!("eff00000"),
-            Token::LabelEnd,
-        ];
+        let asm = r##"
+  mstore(0x40, 0x80)
+  callvalue
+  dup1
+  iszero
+  tag_1
+  jumpi
+  0x00
+  dup1
+  revert
+  tag_1:
+  pop
+  mload(0x40)
+  sub(codesize, bytecodeSize)
+  dup1
+  bytecodeSize
+  dup4
+  codecopy
+  dup2
+  add
+  0x40
+  dup2
+  swap1
+  mstore
+  tag_2
+  swap2
+  tag_3
+  jump
+  tag_2:
+  0x00
+  sstore
+  jump(tag_7)
+  tag_3:
+  0x00
+  0x20
+  dup3
+  dup5
+  sub
+  slt
+  iszero
+  tag_9
+  jumpi
+  0x00
+  dup1
+  revert
+  tag_9:
+  pop
+  mload
+  swap2
+  swap1
+  pop
+  jump
+  tag_7:
+  dataSize(sub_0)
+  dup1
+  dataOffset(sub_0)
+  0x00
+  codecopy
+  0x00
+  return
+  stop
+  
+sub_0: assembly {
+  auxdata: 0x00
+}"##;
 
+        let instructions = tokenizer::clean_asm(asm);
+        let stream = tokenizer::tokenize(instructions);
         let max_size = estimate_max_label_size(&stream);
-        assert_eq!(max_size, 1);
+        assert_eq!(max_size, 2);
+
+        let asm = r##"
+  mstore(0x40, 0x80)
+  callvalue
+  dup1
+  iszero
+  tag_1
+  jumpi
+  0x00
+  dup1
+  revert
+tag_1:
+  pop
+  mload(0x40)
+  sub(codesize, 0x00)
+  dup1
+  0x00
+  dup4
+  codecopy
+  dup2
+  add
+  0x40
+  dup2
+  swap1
+  mstore
+  tag_2
+  swap2
+  tag_3
+  jump	// in
+tag_2:
+  sub(shl(0xa0, 0x01), 0x01)
+  dup2
+  and
+  tag_6
+  jumpi
+  mload(0x40)
+  shl(0xe0, 0x1e4fbdf7)
+  dup2
+  mstore
+  0x00
+  0x04
+  dup3
+  add
+  mstore
+  0x24
+  add
+  mload(0x40)
+  dup1
+  swap2
+  sub
+  swap1
+  revert
+tag_6:
+  0x00
+  dup1
+  sload
+  sub(shl(0xa0, 0x01), 0x01)
+  dup4
+  dup2
+  and
+  not(sub(shl(0xa0, 0x01), 0x01))
+  dup4
+  and
+  dup2
+  or
+  dup5
+  sstore
+  mload(0x40)
+  swap2
+  swap1
+  swap3
+  and
+  swap3
+  dup4
+  swap2
+  0x8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e0
+  swap2
+  swap1
+  log3
+  pop
+  pop
+  jump(tag_10)
+tag_3:
+  0x00
+  0x20
+  dup3
+  dup5
+  sub
+  slt
+  iszero
+  tag_12
+  jumpi
+  0x00
+  dup1
+  revert
+tag_12:
+  dup2
+  mload
+  sub(shl(0xa0, 0x01), 0x01)
+  dup2
+  and
+  dup2
+  eq
+  tag_13
+  jumpi
+  0x00
+  dup1
+  revert
+tag_13:
+  swap4
+  swap3
+  pop
+  pop
+  pop
+  jump	// out
+tag_10:
+  dataSize(sub_0)
+  dup1
+  dataOffset(sub_0)
+  0x00
+  codecopy
+  0x00
+  return
+stop
+sub_0: assembly {
+  auxdata: 0x00000000000000000000
+}"##;
+
+        let instructions = tokenizer::clean_asm(asm);
+        let stream = tokenizer::tokenize(instructions);
+        let max_size = estimate_max_label_size(&stream);
+        assert_eq!(max_size, 2);
     }
 }
