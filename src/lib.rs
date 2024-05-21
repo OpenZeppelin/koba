@@ -13,7 +13,7 @@ pub fn generate(config: &config::Generate) -> eyre::Result<()> {
     let args = config
         .args
         .iter()
-        .map(|a| hex::decode(a))
+        .map(hex::decode)
         .collect::<Result<Vec<_>, _>>()?
         .concat();
     let args = hex::encode(args);

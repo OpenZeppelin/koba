@@ -38,8 +38,8 @@ impl Token {
         })
     }
 
-    pub fn constant(constant: String) -> Self {
-        Token::Constant(constant)
+    pub fn constant(constant: &str) -> Self {
+        Token::Constant(constant.to_owned())
     }
 
     /// Size in bytes of this token bytecode representation.
@@ -55,7 +55,7 @@ impl Token {
     pub fn bytecode(&self) -> eyre::Result<Vec<u8>> {
         match self {
             Token::Opcode(op) => hex::decode(&op.hex).map_err(|e| e.into()),
-            Token::Constant(c) => hex::decode(&c).map_err(|e| e.into()),
+            Token::Constant(c) => hex::decode(c).map_err(|e| e.into()),
             Token::Operator(_) | Token::LabelBegin(_) | Token::LabelEnd | Token::Builtin(_) => {
                 bail!("unexpected token found when generating bytecode")
             }
@@ -66,8 +66,7 @@ impl Token {
 pub fn tokenize(instructions: Vec<String>) -> Vec<Token> {
     instructions
         .into_iter()
-        .map(|s| tokenize_part(&s))
-        .flatten()
+        .flat_map(|s| tokenize_part(&s))
         .collect()
 }
 
@@ -140,8 +139,8 @@ pub fn push_constant(constant: &str) -> Vec<Token> {
 
     let size = constant.len() / 2;
     let push = format!("PUSH{size}");
-    let op = opcode(&push).expect("constant size is bigger than 32 bytes");
-    vec![Token::opcode(op), Token::constant(constant.to_owned())]
+    let op = opcode(&push).expect("constant size should be less than 32 bytes");
+    vec![Token::opcode(op), Token::constant(&constant)]
 }
 
 fn tokenize_auxdata(instruction: &str) -> Option<Vec<Token>> {
@@ -151,7 +150,7 @@ fn tokenize_auxdata(instruction: &str) -> Option<Vec<Token>> {
     }
 
     let data = instruction.chars().skip(prefix.len()).collect::<String>();
-    Some(vec![Token::constant(data[2..].to_owned())])
+    Some(vec![Token::constant(&data[2..])])
 }
 
 fn tokenize_operator(instruction: &str) -> Option<Vec<Token>> {
@@ -179,7 +178,7 @@ fn tokenize_call(instruction: &str) -> Option<Vec<Token>> {
         let f = tokenize_part(&captures[1]);
         let params = tokenize_params(&captures[2]);
 
-        return Some(vec![params, f].concat());
+        return Some([params, f].concat());
     }
 
     None
@@ -189,12 +188,7 @@ fn tokenize_params(params: &str) -> Vec<Token> {
     static COMMA_SPACE: Lazy<Regex> = Lazy::new(|| Regex::new(r",\s*").unwrap());
 
     let params: Vec<&str> = COMMA_SPACE.split(params).collect();
-    params
-        .into_iter()
-        .rev()
-        .map(tokenize_part)
-        .flatten()
-        .collect()
+    params.into_iter().rev().flat_map(tokenize_part).collect()
 }
 
 fn tokenize_label(instruction: &str) -> Option<Vec<Token>> {
@@ -265,7 +259,7 @@ pub fn clean_asm(evmasm: &str) -> Vec<String> {
     let asm = reduce_spaces(&asm);
 
     let instructions = asm
-        .split(" ")
+        .split(' ')
         .filter(|s| !s.is_empty())
         .map(|s| s.to_owned())
         .collect();
@@ -300,7 +294,9 @@ fn remove_space_around_symbols(asm: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{reduce_spaces, remove_comments};
+    use crate::assembler::{opcode, tokenizer::Operator};
+
+    use super::{push_constant, reduce_spaces, remove_comments, tokenize, Token};
 
     #[test]
     fn removes_comments() {
@@ -325,6 +321,115 @@ tag_3:"##;
   stop";
         let actual = reduce_spaces(asm);
         let expected = "dataSize(sub_0) dup1 dataOffset(sub_0) 0x00 codecopy 0x00 return stop";
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn calls() {
+        let actual = tokenize(vec!["mstore(0x40, 0x80)".to_owned()]);
+        let mut expected = vec![];
+        expected.extend(push_constant("80"));
+        expected.extend(push_constant("40"));
+        expected.push(Token::opcode(opcode("mstore").unwrap()));
+        assert_eq!(expected, actual);
+
+        let actual = tokenize(vec!["calldatacopy(0x1, 0x2, calldatasize)".to_owned()]);
+        let mut expected = vec![];
+        expected.push(Token::opcode(opcode("calldatasize").unwrap()));
+        expected.extend(push_constant("02"));
+        expected.extend(push_constant("01"));
+        expected.push(Token::opcode(opcode("calldatacopy").unwrap()));
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn tokenizes_opcodes() {
+        let stream = "push1 push1 mstore"
+            .split_whitespace()
+            .map(|t| t.to_owned())
+            .collect();
+        let actual = tokenize(stream);
+        let mut expected = vec![];
+        expected.push(Token::opcode(opcode("push1").unwrap()));
+        expected.push(Token::opcode(opcode("push1").unwrap()));
+        expected.push(Token::opcode(opcode("mstore").unwrap()));
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn tokenizes_constants() {
+        let stream = "0x80 0x40 mstore"
+            .split_whitespace()
+            .map(|t| t.to_owned())
+            .collect();
+        let actual = tokenize(stream);
+        let mut expected = vec![];
+        expected.extend(push_constant("80"));
+        expected.extend(push_constant("40"));
+        expected.push(Token::opcode(opcode("mstore").unwrap()));
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn tokenizes_labels() {
+        let stream = "tag_1: pop"
+            .split_whitespace()
+            .map(|t| t.to_owned())
+            .collect();
+        let actual = tokenize(stream);
+        let mut expected = vec![];
+        expected.push(Token::LabelBegin("tag_1".to_owned()));
+        expected.push(Token::LabelEnd);
+        expected.push(Token::opcode(opcode("jumpdest").unwrap()));
+        expected.push(Token::opcode(opcode("pop").unwrap()));
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn tokenizes_auxdata() {
+        let stream = "auxdata:0x1234"
+            .split_whitespace()
+            .map(|t| t.to_owned())
+            .collect();
+        let actual = tokenize(stream);
+        let mut expected = vec![];
+        expected.push(Token::constant("1234"));
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn tokenizes_assembly_block() {
+        let stream = "sub_0:assembly{ dup1 }"
+            .split_whitespace()
+            .map(|t| t.to_owned())
+            .collect();
+        let actual = tokenize(stream);
+        let mut expected = vec![];
+        expected.push(Token::LabelBegin("sub_0".to_owned()));
+        expected.push(Token::opcode(opcode("dup1").unwrap()));
+        expected.push(Token::LabelEnd);
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn tokenizes_label_references() {
+        let stream = "dup1 label_0 dup2 label_0: dup3 dup4"
+            .split_whitespace()
+            .map(|t| t.to_owned())
+            .collect();
+        let actual = tokenize(stream);
+        let mut expected = vec![];
+        expected.push(Token::opcode(opcode("dup1").unwrap()));
+        expected.push(Token::Operator(Operator {
+            name: "dataOffset".to_owned(),
+            arg: "label_0".to_owned(),
+        }));
+        expected.push(Token::opcode(opcode("dup2").unwrap()));
+        expected.push(Token::LabelBegin("label_0".to_owned()));
+        expected.push(Token::LabelEnd);
+        expected.push(Token::opcode(opcode("jumpdest").unwrap()));
+        expected.push(Token::opcode(opcode("dup3").unwrap()));
+        expected.push(Token::opcode(opcode("dup4").unwrap()));
         assert_eq!(expected, actual);
     }
 }
