@@ -8,7 +8,7 @@ mod wasm;
 pub fn generate(config: &config::Generate) -> eyre::Result<()> {
     let evmasm = solidity::assembly(&config.sol)?;
     let wasm = wasm::compress(&config.wasm)?;
-    let asm = assembler::compile(&evmasm, &wasm)?;
+    let asm = assembler::assemble(&evmasm, &wasm)?;
 
     let args = config
         .args

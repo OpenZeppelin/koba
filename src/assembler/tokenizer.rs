@@ -1,4 +1,4 @@
-use std::mem;
+use std::fmt::Display;
 
 use eyre::bail;
 use once_cell::sync::Lazy;
@@ -65,6 +65,19 @@ impl Token {
     }
 }
 
+impl Display for Token {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Token::Opcode(opcode) => write!(f, "{}", opcode.name),
+            Token::Constant(c) => write!(f, "0x{}", c),
+            Token::Operator(operator) => write!(f, "{}({})", operator.name, operator.arg),
+            Token::Builtin(b) => write!(f, "{}", b),
+            Token::LabelBegin(label) => write!(f, "{}:", label),
+            Token::LabelEnd => write!(f, "labelEnd"),
+        }
+    }
+}
+
 pub fn tokenize(instructions: Vec<String>) -> Vec<Token> {
     instructions
         .into_iter()
@@ -72,7 +85,7 @@ pub fn tokenize(instructions: Vec<String>) -> Vec<Token> {
         .collect()
 }
 
-fn tokenize_part(instruction: &str) -> Vec<Token> {
+pub fn tokenize_part(instruction: &str) -> Vec<Token> {
     if let Some(byte) = opcode(instruction) {
         return vec![Token::opcode(byte)];
     }
@@ -173,79 +186,37 @@ fn tokenize_operator(instruction: &str) -> Option<Vec<Token>> {
     None
 }
 
-fn tokenize_call(instruction: &str) -> Option<Vec<Token>> {
+fn tokenize_call(call: &str) -> Option<Vec<Token>> {
     static FUNCTION_CALL: Lazy<Regex> = Lazy::new(|| Regex::new(r"^([^\(\)]+)\((.*)\)$").unwrap());
-
-    if let Some(captures) = FUNCTION_CALL.captures(instruction) {
-        let f = tokenize_part(&captures[1]);
-        let args = tokenize_args(&captures[2]);
-
-        return Some([args, f].concat());
+    if FUNCTION_CALL.captures(call).is_none() {
+        return None;
     }
 
-    None
-}
-
-fn tokenize_args(args: &str) -> Vec<Token> {
-    // Simple case: no nested arguments.
-    if !args.contains('(') {
-        static COMMA_SPACE: Lazy<Regex> = Lazy::new(|| Regex::new(r",\s*").unwrap());
-        let args: Vec<&str> = COMMA_SPACE.split(args).collect();
-        return args.into_iter().rev().flat_map(tokenize_part).collect();
-    }
-
-    let mut tokens = vec![];
-
-    let args = args.chars().collect::<Vec<char>>();
-
+    let tokens = call.replace(['(', ')', ','], " ");
+    let tokens = tokens.split_whitespace().collect::<Vec<_>>();
+    let mut amended = vec![];
     let mut i = 0;
-    let mut current = String::new();
-    while i < args.len() {
-        match args[i] {
-            ',' => {
-                if !current.is_empty() {
-                    tokens.extend(tokenize_part(&mem::take(&mut current)));
-                }
-                i += 1;
-            }
-            '(' => {
-                let opcode = tokenize_part(&mem::take(&mut current));
-                let mut inner = vec![];
-                i += 1;
-                let mut parens = 1;
-                loop {
-                    match args[i] {
-                        '(' => parens += 1,
-                        ')' => parens -= 1,
-                        _ => {}
-                    }
-                    if args[i] == ')' && parens == 0 {
-                        i += 1;
-                        break;
-                    }
-                    inner.push(args[i]);
-                    i += 1;
-                }
-
-                let inner: String = inner[..inner.len()].into_iter().collect();
-                tokens.extend(tokenize_args(&inner));
-                tokens.extend(opcode);
-                current.clear();
-            }
-            c => {
-                current.push(c);
-                i += 1;
-            }
+    while i < tokens.len() - 1 {
+        if tokens[i] == "dataOffset" || tokens[i] == "dataSize" {
+            amended.push(format!("{}({})", tokens[i], tokens[i + 1]));
+            i += 2;
+            continue;
         }
+
+        amended.push(tokens[i].to_owned());
+        i += 1;
     }
 
-    if !current.is_empty() {
-        let mut t = tokenize_part(&current);
-        t.extend(tokens);
-        tokens = t;
+    if i < tokens.len() {
+        amended.push(tokens[i].to_owned());
     }
 
-    tokens
+    let tokens = amended
+        .into_iter()
+        .rev()
+        .flat_map(|t| tokenize_part(&t))
+        .collect();
+    Some(tokens)
 }
 
 fn tokenize_label(instruction: &str) -> Option<Vec<Token>> {
@@ -503,7 +474,7 @@ tag_3:"##;
 
     #[test]
     fn tokenizes_nested_args() {
-        let stream = "sub(shl(0xa0,0x02),0x01)"
+        let stream = "sub(shl(0x03,0x02),0x01)"
             .split_whitespace()
             .map(|t| t.to_owned())
             .collect();
@@ -511,26 +482,26 @@ tag_3:"##;
         let mut expected = vec![];
         expected.extend(push_constant("01"));
         expected.extend(push_constant("02"));
-        expected.extend(push_constant("a0"));
+        expected.extend(push_constant("03"));
         expected.push(Token::opcode(opcode("shl").unwrap()));
         expected.push(Token::opcode(opcode("sub").unwrap()));
         assert_eq!(expected, actual);
 
-        let stream = "sub(codecopy(0xa0,0x02,0x03),0x01)"
+        let stream = "sub(codecopy(0x04,0x03,0x02),0x01)"
             .split_whitespace()
             .map(|t| t.to_owned())
             .collect();
         let actual = tokenize(stream);
         let mut expected = vec![];
         expected.extend(push_constant("01"));
-        expected.extend(push_constant("03"));
         expected.extend(push_constant("02"));
-        expected.extend(push_constant("a0"));
+        expected.extend(push_constant("03"));
+        expected.extend(push_constant("04"));
         expected.push(Token::opcode(opcode("codecopy").unwrap()));
         expected.push(Token::opcode(opcode("sub").unwrap()));
         assert_eq!(expected, actual);
 
-        let stream = "not(sub(shl(0xa0,0x02),0x01))"
+        let stream = "not(sub(shl(0x03,0x02),0x01))"
             .split_whitespace()
             .map(|t| t.to_owned())
             .collect();
@@ -538,10 +509,44 @@ tag_3:"##;
         let mut expected = vec![];
         expected.extend(push_constant("01"));
         expected.extend(push_constant("02"));
-        expected.extend(push_constant("a0"));
+        expected.extend(push_constant("03"));
         expected.push(Token::opcode(opcode("shl").unwrap()));
         expected.push(Token::opcode(opcode("sub").unwrap()));
         expected.push(Token::opcode(opcode("not").unwrap()));
+        assert_eq!(expected, actual);
+
+        let stream = "not(sub(0x05,shl(0x04,0x03),0x02),0x01)"
+            .split_whitespace()
+            .map(|t| t.to_owned())
+            .collect();
+        let actual = tokenize(stream);
+        let mut expected = vec![];
+        expected.extend(push_constant("01"));
+        expected.extend(push_constant("02"));
+        expected.extend(push_constant("03"));
+        expected.extend(push_constant("04"));
+        expected.push(Token::opcode(opcode("shl").unwrap()));
+        expected.extend(push_constant("05"));
+        expected.push(Token::opcode(opcode("sub").unwrap()));
+        expected.push(Token::opcode(opcode("not").unwrap()));
+        assert_eq!(expected, actual);
+
+        let stream = "codecopy(0x00,dataOffset(sub_0),dataSize(sub_0))"
+            .split_whitespace()
+            .map(|t| t.to_owned())
+            .collect();
+        let actual = tokenize(stream);
+        let mut expected = vec![];
+        expected.push(Token::Operator(Operator {
+            name: "dataSize".to_owned(),
+            arg: "sub_0".to_owned(),
+        }));
+        expected.push(Token::Operator(Operator {
+            name: "dataOffset".to_owned(),
+            arg: "sub_0".to_owned(),
+        }));
+        expected.extend(push_constant("00"));
+        expected.push(Token::opcode(opcode("codecopy").unwrap()));
         assert_eq!(expected, actual);
     }
 }
