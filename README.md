@@ -1,4 +1,4 @@
-# koba
+# koba (工場)
 
 Generate deployment transaction data for Stylus contracts.
 
@@ -80,3 +80,8 @@ cast storage --rpc-url https://stylusv2.arbitrum.io/rpc <contract address> 0
 
 `koba` currently does not support `immutable` variables, since there is no
 equivalent mechanism for Stylus.
+
+## Why koba
+
+`koba` means [factory](https://jisho.org/search/%E5%B7%A5%E5%A0%B4) in japanese
+-- the factory where stylus gets assembled.
