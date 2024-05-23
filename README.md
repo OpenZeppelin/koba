@@ -6,6 +6,10 @@ Generate deployment transaction data for Stylus contracts.
 > This project is still in a very early and experimental phase. It has never
 > been audited nor thoroughly reviewed for security vulnerabilities. Do not use
 > in production.
+>
+> This project is meant to be temporary. The problem it solves should be fixed
+> by either `cargo-stylus` itself or in the Stylus VM. As such, we maintain this
+> on a best-effort basis.
 
 ## Usage
 
@@ -23,10 +27,6 @@ sol_storage! {
 impl Counter {
     pub fn number(&self) -> U256 {
         self.number.get()
-    }
-
-    pub fn set_number(&mut self, new_number: U256) {
-        self.number.set(new_number);
     }
 
     pub fn increment(&mut self) {
@@ -75,3 +75,8 @@ cast send --rpc-url https://stylusv2.arbitrum.io/rpc --private-key <private-key>
 cast storage --rpc-url https://stylusv2.arbitrum.io/rpc <contract address> 0
 0x0000000000000000000000000000000000000000000000000000000000000006
 ```
+
+## Limitations
+
+`koba` currently does not support `immutable` variables, since there no
+equivalent mechanism for Stylus.
