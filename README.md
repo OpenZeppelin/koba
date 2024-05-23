@@ -78,5 +78,5 @@ cast storage --rpc-url https://stylusv2.arbitrum.io/rpc <contract address> 0
 
 ## Limitations
 
-`koba` currently does not support `immutable` variables, since there no
+`koba` currently does not support `immutable` variables, since there is no
 equivalent mechanism for Stylus.
