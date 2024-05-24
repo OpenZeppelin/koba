@@ -19,12 +19,15 @@ struct Config {
 enum Commands {
     #[command(name = "generate")]
     Generate(Generate),
+    #[command(name = "deploy")]
+    Deploy(Deploy),
 }
 
 impl Commands {
     pub fn run(&self) -> eyre::Result<()> {
         match self {
             Commands::Generate(command) => command.run(),
+            Commands::Deploy(command) => command.run(),
         }
     }
 }
@@ -43,8 +46,40 @@ pub struct Generate {
     pub args: Vec<String>,
 }
 
-impl Generate {
+const STYLUS_TESTNET_RPC: &str = "https://stylusv2.arbitrum.io/rpc";
+
+/// Deploy & activate a Stylus contract.
+#[derive(Parser, Debug)]
+pub struct Deploy {
+    #[command(flatten)]
+    pub generate_config: Generate,
+    #[command(flatten)]
+    pub auth: PrivateKey,
+    /// Arbitrum RPC endpoint.
+    #[arg(short = 'e', long, default_value = STYLUS_TESTNET_RPC)]
+    pub endpoint: String,
+}
+
+impl Deploy {
     pub fn run(&self) -> eyre::Result<()> {
-        crate::generate(self)
+        crate::deploy(self)
     }
+}
+
+#[derive(Parser, Debug)]
+#[group(required = true)]
+pub struct PrivateKey {
+    /// File path to a text file containing a hex-encoded private key.
+    #[arg(long)]
+    pub private_key_path: Option<PathBuf>,
+    /// Private key as a hex string. Warning: this exposes your key to shell
+    /// history.
+    #[arg(long)]
+    pub private_key: Option<String>,
+    /// Path to an Ethereum wallet keystore file (e.g. clef).
+    #[arg(long)]
+    pub keystore_path: Option<String>,
+    /// Keystore password file.
+    #[arg(long)]
+    pub keystore_password_path: Option<PathBuf>,
 }
