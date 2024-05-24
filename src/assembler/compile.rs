@@ -2,10 +2,10 @@ use crate::assembler::labeler;
 
 use super::tokenizer;
 
-pub fn assemble(evmasm: &str, wasm: &[u8]) -> eyre::Result<String> {
+pub fn assemble(evmasm: &str, wasm: &[u8]) -> eyre::Result<Vec<u8>> {
     let evmasm = tokenizer::amend(evmasm, &wasm);
     let bytecode = codegen(&evmasm)?;
-    Ok(hex::encode(bytecode))
+    Ok(bytecode)
 }
 
 fn codegen(asm: &str) -> eyre::Result<Vec<u8>> {
