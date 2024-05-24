@@ -11,6 +11,12 @@ Generate deployment transaction data for Stylus contracts.
 > by either `cargo-stylus` itself or in the Stylus VM. As such, we maintain this
 > on a best-effort basis.
 
+## Installation
+
+To install `koba` to you machine, just run `cargo install koba`. To compile
+solidity code, `koba` requires `solc` to be installed and available through the
+command line.
+
 ## Usage
 
 For a contract like this:
