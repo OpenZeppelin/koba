@@ -3,7 +3,7 @@ use crate::assembler::labeler;
 use super::tokenizer;
 
 pub fn assemble(evmasm: &str, wasm: &[u8]) -> eyre::Result<Vec<u8>> {
-    let evmasm = tokenizer::amend(evmasm, &wasm);
+    let evmasm = tokenizer::amend(evmasm, wasm);
     let bytecode = codegen(&evmasm)?;
     Ok(bytecode)
 }

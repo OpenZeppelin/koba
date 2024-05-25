@@ -188,9 +188,7 @@ fn tokenize_operator(instruction: &str) -> Option<Vec<Token>> {
 
 fn tokenize_call(call: &str) -> Option<Vec<Token>> {
     static FUNCTION_CALL: Lazy<Regex> = Lazy::new(|| Regex::new(r"^([^\(\)]+)\((.*)\)$").unwrap());
-    if FUNCTION_CALL.captures(call).is_none() {
-        return None;
-    }
+    FUNCTION_CALL.captures(call)?;
 
     let tokens = call.replace(['(', ')', ','], " ");
     let tokens = tokens.split_whitespace().collect::<Vec<_>>();
