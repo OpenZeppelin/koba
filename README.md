@@ -17,7 +17,15 @@ To install `koba` to you machine, just run `cargo install koba`. To compile
 solidity code, `koba` requires `solc` to be installed and available through the
 command line.
 
+You can also use `koba` as a library by adding it to your project using
+`cargo add koba`.
+
 ## Usage
+
+You can use the command line interface in two ways: the `generate` and the
+`deploy` commands.
+
+### `koba generate`
 
 For a contract like this:
 
@@ -58,7 +66,7 @@ the following command outputs the transaction data you would need to send to
 deploy the contract.
 
 ```sh
-$ koba generate --sol path_to_sol --wasm path_to_wasm
+$ koba generate --sol <path-to-constructor> --wasm <path-to-wasm>
 6080604052348015600e575f80fd5b...d81f197cb0f070175cce2fd57095700201
 ```
 
@@ -82,10 +90,26 @@ cast storage --rpc-url https://stylusv2.arbitrum.io/rpc <contract address> 0
 0x0000000000000000000000000000000000000000000000000000000000000006
 ```
 
+### `koba deploy`
+
+For the same code in the above section, you can instead just run `koba deploy`
+with the appropriate arguments to deploy and activate your Stylus contract in
+one go:
+
+```sh
+$ koba deploy --sol <path-to-constructor> --wasm <path-to-wasm> --args <constructor-arguments> -e https://stylusv2.arbitrum.io/rpc --private-key <private-key>
+wasm data fee: Ξ0.000113
+init code size: 20.8 KB
+deploying to RPC: https://stylusv2.arbitrum.io/rpc
+deployed code: 0x470AE56DFbea924722423926782D8aB30f108A49
+activated with 2987042 gas
+ready onchain: 0x40086445e80365b648621fd62d978d716708fe05144f303baa620086eda854d1
+```
+
 ## Limitations
 
-`koba` currently does not support `immutable` variables, since there is no
-equivalent mechanism for Stylus.
+`koba` currently does not support Solidity's `immutable` variables, since there
+is no equivalent mechanism for Stylus.
 
 ## Why koba
 
