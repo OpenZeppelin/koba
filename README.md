@@ -13,16 +13,16 @@ Generate deployment transaction data for Stylus contracts.
 
 ## Installation
 
-To install `koba` to you machine, just run `cargo install koba`. To compile
-solidity code, `koba` requires `solc` to be installed and available through the
-command line.
+To install `koba` on your machine, just run `cargo install koba`. Compiling
+Solidity code with `koba` requires `solc` to be installed and available through
+the command line.
 
 You can also use `koba` as a library by adding it to your project using
 `cargo add koba`.
 
 ## Usage
 
-You can use the command line interface in two ways: the `generate` and the
+You can use the command-line interface in two ways: the `generate` and the
 `deploy` commands.
 
 ### `koba generate`
