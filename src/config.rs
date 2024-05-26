@@ -2,6 +2,9 @@ use std::path::PathBuf;
 
 use clap::{command, Parser, Subcommand};
 use owo_colors::OwoColorize;
+use tokio::runtime::Builder;
+
+use crate::deploy;
 
 /// Main entrypoing to `koba`.
 pub fn run() -> eyre::Result<()> {
@@ -63,8 +66,9 @@ pub struct Deploy {
 
 impl Deploy {
     pub fn run(&self) -> eyre::Result<()> {
-        let _result = crate::deploy(self)?;
-        println!("{}", "Success!".bright_green());
+        let runtime = Builder::new_multi_thread().enable_all().build()?;
+        let _address = runtime.block_on(deploy(self))?;
+        println!("{}", "success!".bright_green());
         Ok(())
     }
 }

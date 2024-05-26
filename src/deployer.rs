@@ -13,7 +13,6 @@ use alloy::{
 };
 use eyre::{bail, Context, ContextCompat};
 use owo_colors::OwoColorize;
-use tokio::runtime::Builder;
 
 use crate::{
     config::Deploy,
@@ -40,13 +39,7 @@ sol! {
     }
 }
 
-pub fn deploy(config: &Deploy) -> eyre::Result<Address> {
-    let runtime = Builder::new_multi_thread().enable_all().build()?;
-    let address = runtime.block_on(deploy_impl(config))?;
-    Ok(address)
-}
-
-async fn deploy_impl(config: &Deploy) -> eyre::Result<Address> {
+pub async fn deploy(config: &Deploy) -> eyre::Result<Address> {
     let signer = config.auth.wallet()?;
     let sender = signer.address();
 

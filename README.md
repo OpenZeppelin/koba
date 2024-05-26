@@ -105,6 +105,7 @@ deployed code: 0x470AE56DFbea924722423926782D8aB30f108A49
 deployment tx hash: 0xb52a68b973fb883dbef6bf3e0cbee4f02608ae71ad5a89f6a2f0c9f094242a5b
 activated with 2987042 gas
 activation tx hash: 0x40086445e80365b648621fd62d978d716708fe05144f303baa620086eda854d1
+success!
 ```
 
 ## Limitations
