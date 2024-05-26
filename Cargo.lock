@@ -77,7 +77,6 @@ dependencies = [
  "alloy-eips",
  "alloy-genesis",
  "alloy-network",
- "alloy-node-bindings",
  "alloy-provider",
  "alloy-rpc-client",
  "alloy-rpc-types",
@@ -216,21 +215,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "alloy-node-bindings"
-version = "0.1.0"
-source = "git+https://github.com/alloy-rs/alloy?rev=c6c91cc#c6c91cc197c79c456433c79d60f81c8c5aa13001"
-dependencies = [
- "alloy-genesis",
- "alloy-primitives",
- "k256",
- "serde_json",
- "tempfile",
- "thiserror",
- "tracing",
- "url",
-]
-
-[[package]]
 name = "alloy-primitives"
 version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -261,12 +245,10 @@ dependencies = [
  "alloy-eips",
  "alloy-json-rpc",
  "alloy-network",
- "alloy-node-bindings",
  "alloy-primitives",
  "alloy-rpc-client",
  "alloy-rpc-types",
  "alloy-rpc-types-trace",
- "alloy-signer-wallet",
  "alloy-transport",
  "alloy-transport-http",
  "async-stream",

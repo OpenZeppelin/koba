@@ -62,7 +62,8 @@ pub struct Deploy {
 
 impl Deploy {
     pub fn run(&self) -> eyre::Result<()> {
-        crate::deploy(self)
+        let _ = crate::deploy(self);
+        Ok(())
     }
 }
 

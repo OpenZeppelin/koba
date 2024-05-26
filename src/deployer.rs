@@ -40,12 +40,13 @@ sol! {
     }
 }
 
-pub fn deploy(config: &Deploy) -> eyre::Result<()> {
+pub fn deploy(config: &Deploy) -> eyre::Result<Address> {
     let runtime = Builder::new_multi_thread().enable_all().build()?;
-    runtime.block_on(deploy_impl(config))
+    let address = runtime.block_on(deploy_impl(config))?;
+    Ok(address)
 }
 
-async fn deploy_impl(config: &Deploy) -> eyre::Result<()> {
+async fn deploy_impl(config: &Deploy) -> eyre::Result<Address> {
     let signer = config.auth.wallet()?;
     let sender = signer.address();
 
@@ -101,7 +102,7 @@ async fn deploy_impl(config: &Deploy) -> eyre::Result<()> {
 
     if is_activated(&tx, &provider).await? {
         println!("{}", "wasm already activated!".bright_green());
-        return Ok(());
+        return Ok(program);
     }
 
     let receipt = provider.send_transaction(tx).await?.get_receipt().await?;
@@ -113,7 +114,7 @@ async fn deploy_impl(config: &Deploy) -> eyre::Result<()> {
         receipt.transaction_hash.bright_magenta()
     );
 
-    Ok(())
+    Ok(program)
 }
 
 async fn get_activation_fee<P, T>(

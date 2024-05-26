@@ -21,7 +21,6 @@ wasmer = "3.1.0"
 alloy = { git = "https://github.com/alloy-rs/alloy", rev = "c6c91cc", features = [
   "contract",
   "network",
-  "node-bindings",
   "providers",
   "provider-http",
   "rpc-client",
