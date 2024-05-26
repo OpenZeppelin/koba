@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use clap::{command, Parser, Subcommand};
+use owo_colors::OwoColorize;
 
 /// Main entrypoing to `koba`.
 pub fn run() -> eyre::Result<()> {
@@ -41,9 +42,9 @@ pub struct Generate {
     /// Path to the contract's Solidity constructor code.
     #[arg(long)]
     pub sol: PathBuf,
-    /// Constructor arguments.
+    /// ABI-encoded constructor arguments.
     #[arg(long)]
-    pub args: Vec<String>,
+    pub args: Option<String>,
 }
 
 const STYLUS_TESTNET_RPC: &str = "https://stylusv2.arbitrum.io/rpc";
@@ -62,7 +63,8 @@ pub struct Deploy {
 
 impl Deploy {
     pub fn run(&self) -> eyre::Result<()> {
-        let _ = crate::deploy(self);
+        let _result = crate::deploy(self)?;
+        println!("{}", "Success!".bright_green());
         Ok(())
     }
 }

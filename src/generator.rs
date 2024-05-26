@@ -16,13 +16,10 @@ impl Generate {
     }
 
     fn args(&self) -> eyre::Result<Vec<u8>> {
-        Ok(self
-            .args
-            .iter()
-            .map(hex::decode)
-            .collect::<Result<Vec<_>, _>>()
-            .wrap_err("args were not proper hex strings")?
-            .concat())
+        self.args
+            .clone()
+            .map_or(Ok(vec![]), hex::decode)
+            .wrap_err("args were not proper hex strings")
     }
 
     fn generate(&self) -> eyre::Result<Vec<u8>> {
