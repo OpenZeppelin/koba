@@ -16,6 +16,7 @@ pub fn compress(path: impl AsRef<Path>) -> eyre::Result<Vec<u8>> {
     let path = path.as_ref();
     let wasm = fs::read(path)
         .wrap_err_with(|| eyre::eyre!("failed to read wasm {}", path.to_string_lossy()))?;
+    println!("wasm len {}", wasm.len());
     let wasm = wasmer::wat2wasm(&wasm).wrap_err("failed to parse wasm")?;
 
     let stream = Cursor::new(wasm);
@@ -24,6 +25,7 @@ pub fn compress(path: impl AsRef<Path>) -> eyre::Result<Vec<u8>> {
     compressor
         .read_to_end(&mut contract_code)
         .wrap_err("failed to compress wasm bytes")?;
+    println!("contract_code len {}", contract_code.len());
 
     Ok(contract_code)
 }
