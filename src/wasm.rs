@@ -8,7 +8,7 @@ use brotli2::read::BrotliEncoder;
 use eyre::Context;
 
 pub const COMPRESSION_LEVEL: u32 = 11;
-pub const EOF_PREFIX: &str = "EFF00000";
+pub const EOF_PREFIX: &str = "EFF000";
 
 /// Reads a webassembly file at the specified `path` and attempts to compress
 /// it.
