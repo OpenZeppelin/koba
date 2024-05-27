@@ -49,9 +49,10 @@ pub async fn deploy(config: &Deploy) -> eyre::Result<Address> {
         .signer(EthereumSigner::from(signer))
         .on_http(rpc_url);
 
+    let balance = provider.get_balance(sender).await?;
+    println!("sender {} balance {:?}", sender, balance);
     let wasm_path = &config.generate_config.wasm;
     let runtime = wasm::compress(wasm_path).wrap_err("failed to compress wasm")?;
-    println!("runtime {}", hex::encode(&runtime));
     println!("sender {}", sender);
     let fee = get_activation_fee(&runtime, &provider, sender).await?;
 
