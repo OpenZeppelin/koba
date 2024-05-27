@@ -1,7 +1,10 @@
 use alloy::{
     hex::FromHex,
     network::{EthereumSigner, ReceiptResponse, TransactionBuilder},
-    primitives::{utils::parse_ether, Address, Bytes, U256},
+    primitives::{
+        utils::{format_ether, parse_ether},
+        Address, Bytes, U256,
+    },
     providers::{Provider, ProviderBuilder},
     rpc::types::eth::{
         state::{AccountOverride, StateOverride},
@@ -50,7 +53,7 @@ pub async fn deploy(config: &Deploy) -> eyre::Result<Address> {
         .on_http(rpc_url);
 
     let balance = provider.get_balance(sender).await?;
-    println!("sender {} balance {:?}", sender, balance);
+    println!("sender {} balance {:?}", sender, format_ether(balance));
     let wasm_path = &config.generate_config.wasm;
     let runtime = wasm::compress(wasm_path).wrap_err("failed to compress wasm")?;
     println!("sender {}", sender);
@@ -122,8 +125,8 @@ where
     P: Provider<T>,
     T: Transport + Clone,
 {
-    println!("runtime {}", hex::encode(runtime));
-    println!("bytes {:?}", Bytes::copy_from_slice(runtime));
+    // println!("runtime {}", hex::encode(runtime));
+    // println!("bytes {:?}", Bytes::copy_from_slice(runtime));
     let program = Address::random();
     let account_override = AccountOverride {
         code: Some(Bytes::copy_from_slice(runtime)),
@@ -169,7 +172,7 @@ where
             }
         };
 
-        return Ok(parse_ether("0.001")?);
+        return Ok(parse_ether("0.01")?);
     }
     let output = output.unwrap();
     let ArbWasm::activateProgramReturn { dataFee, .. } =
