@@ -138,7 +138,36 @@ where
         .with_value(parse_ether("1").unwrap());
     println!("tx {:?}", &tx);
 
-    let output = provider.call(&tx).overrides(&overrides).await?;
+    let output = provider.call(&tx).overrides(&overrides).await;
+    if let Err(ref e) = output {
+        println!("{:?}", e);
+        let Some(payload) = e.as_error_resp() else {
+            bail!("transport error {e}");
+        };
+        let Some(ref raw_value) = payload.data else {
+            bail!("transport error {e}");
+        };
+        let bytes = raw_value.get();
+        let bytes: [u8; 4] = FromHex::from_hex(bytes.trim_matches('"'))?;
+
+        use ArbWasm::ArbWasmErrors as Errors;
+        let error = Errors::abi_decode(&bytes, true).wrap_err("unknown ArbWasm error")?;
+        match error {
+            Errors::ProgramNotWasm(_) => println!("not a Stylus program"),
+            Errors::ProgramNotActivated(_)
+            | Errors::ProgramNeedsUpgrade(_)
+            | Errors::ProgramExpired(_) => {
+                println!("hmmm1");
+            }
+            Errors::ProgramUpToDate(_) => {
+                println!("hmmm2");
+            }
+            Errors::ProgramKeepaliveTooSoon(_) | Errors::ProgramInsufficientValue(_) => {
+                println!("unexpected ArbWasm error");
+            }
+        };
+    }
+    let output = output.unwrap();
     let ArbWasm::activateProgramReturn { dataFee, .. } =
         ArbWasm::activateProgramCall::abi_decode_returns(&output, true)?;
 
