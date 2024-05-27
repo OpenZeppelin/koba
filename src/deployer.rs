@@ -58,9 +58,9 @@ pub async fn deploy(config: &Deploy) -> eyre::Result<Address> {
     let runtime = wasm::compress(wasm_path).wrap_err("failed to compress wasm")?;
     println!("sender {}", sender);
     let fee = if config.only_deploy {
-        get_activation_fee(&runtime, &provider, sender).await?
-    } else {
         parse_ether("0.01").unwrap()
+    } else {
+        get_activation_fee(&runtime, &provider, sender).await?
     };
 
     // Give some leeway so that activation doesn't fail -- it'll get refunded
