@@ -122,6 +122,8 @@ where
     P: Provider<T>,
     T: Transport + Clone,
 {
+    println!("runtime {}", hex::encode(runtime));
+    println!("bytes {:?}", Bytes::copy_from_slice(runtime));
     let program = Address::random();
     let account_override = AccountOverride {
         code: Some(Bytes::copy_from_slice(runtime)),
@@ -135,7 +137,7 @@ where
         .with_from(sender)
         .with_to(ARB_WASM_ADDRESS)
         .with_input(tx_input)
-        .with_value(parse_ether("1").unwrap());
+        .with_value(parse_ether("0.01").unwrap());
     println!("tx {:?}", &tx);
 
     let output = provider.call(&tx).overrides(&overrides).await;
@@ -166,6 +168,8 @@ where
                 println!("unexpected ArbWasm error");
             }
         };
+
+        return Ok(parse_ether("0.001")?);
     }
     let output = output.unwrap();
     let ArbWasm::activateProgramReturn { dataFee, .. } =
