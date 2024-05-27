@@ -57,8 +57,11 @@ pub async fn deploy(config: &Deploy) -> eyre::Result<Address> {
     let wasm_path = &config.generate_config.wasm;
     let runtime = wasm::compress(wasm_path).wrap_err("failed to compress wasm")?;
     println!("sender {}", sender);
-    // let fee = get_activation_fee(&runtime, &provider, sender).await?;
-    let fee = parse_ether("0.01").unwrap();
+    let fee = if config.only_deploy {
+        get_activation_fee(&runtime, &provider, sender).await?
+    } else {
+        parse_ether("0.01").unwrap()
+    };
 
     // Give some leeway so that activation doesn't fail -- it'll get refunded
     // anyways.
@@ -93,26 +96,28 @@ pub async fn deploy(config: &Deploy) -> eyre::Result<Address> {
         receipt.transaction_hash.bright_magenta()
     );
 
-    let tx_input = ArbWasm::activateProgramCall { program }.abi_encode();
-    let tx = TransactionRequest::default()
-        .with_from(sender)
-        .with_to(ARB_WASM_ADDRESS)
-        .with_input(tx_input)
-        .with_value(data_fee);
+    if !config.only_deploy {
+        let tx_input = ArbWasm::activateProgramCall { program }.abi_encode();
+        let tx = TransactionRequest::default()
+            .with_from(sender)
+            .with_to(ARB_WASM_ADDRESS)
+            .with_input(tx_input)
+            .with_value(data_fee);
 
-    if is_activated(&tx, &provider).await? {
-        println!("{}", "wasm already activated!".bright_green());
-        return Ok(program);
+        if is_activated(&tx, &provider).await? {
+            println!("{}", "wasm already activated!".bright_green());
+            return Ok(program);
+        }
+
+        let receipt = provider.send_transaction(tx).await?.get_receipt().await?;
+
+        let gas = format_gas(U256::from(receipt.gas_used));
+        println!("activated with {gas}");
+        println!(
+            "activation tx hash: {}",
+            receipt.transaction_hash.bright_magenta()
+        );
     }
-
-    let receipt = provider.send_transaction(tx).await?.get_receipt().await?;
-
-    let gas = format_gas(U256::from(receipt.gas_used));
-    println!("activated with {gas}");
-    println!(
-        "activation tx hash: {}",
-        receipt.transaction_hash.bright_magenta()
-    );
 
     Ok(program)
 }

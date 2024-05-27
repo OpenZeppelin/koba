@@ -62,6 +62,8 @@ pub struct Deploy {
     /// Arbitrum RPC endpoint.
     #[arg(short = 'e', long, default_value = STYLUS_TESTNET_RPC)]
     pub endpoint: String,
+    #[arg(long)]
+    pub only_deploy: bool,
 }
 
 impl Deploy {
