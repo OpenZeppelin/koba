@@ -126,7 +126,7 @@ where
     P: Provider<T>,
     T: Transport + Clone,
 {
-    // println!("runtime {}", hex::encode(runtime));
+    println!("runtime {}", hex::encode(runtime));
     // println!("bytes {:?}", Bytes::copy_from_slice(runtime));
     let program = Address::random();
     let account_override = AccountOverride {
