@@ -11,7 +11,7 @@ use alloy::{
     sol_types::{SolCall, SolInterface},
     transports::Transport,
 };
-use eyre::{bail, Context, ContextCompat};
+use eyre::{bail, Context, ContextCompat, OptionExt};
 use owo_colors::OwoColorize;
 
 use crate::{
@@ -57,17 +57,19 @@ pub async fn deploy(config: &Deploy) -> eyre::Result<Address> {
     // anyways.
     let data_fee = fee * U256::from(120) / U256::from(100);
     let visual_fee = format_data_fee(fee).unwrap_or("???".red().to_string());
-    println!("wasm data fee: {}", visual_fee);
+    if !config.deploy_only && fee != DEFAULT_DATA_FEE {
+        println!("wasm data fee: {}", visual_fee);
 
-    let balance = provider.get_balance(sender).await?;
-    if balance < data_fee {
-        bail!(
-            "not enough funds in account {} to pay for data fee\n\
+        let balance = provider.get_balance(sender).await?;
+        if balance < data_fee {
+            bail!(
+                "not enough funds in account {} to pay for data fee\n\
                  balance {} < {}\n",
-            sender.red(),
-            balance.red(),
-            format!("{data_fee} wei").red(),
-        );
+                sender.red(),
+                balance.red(),
+                format!("{data_fee} wei").red(),
+            );
+        }
     }
 
     let asm = crate::generate(&config.generate_config)?;
@@ -86,29 +88,35 @@ pub async fn deploy(config: &Deploy) -> eyre::Result<Address> {
         receipt.transaction_hash.bright_magenta()
     );
 
-    let tx_input = ArbWasm::activateProgramCall { program }.abi_encode();
-    let tx = TransactionRequest::default()
-        .with_from(sender)
-        .with_to(ARB_WASM_ADDRESS)
-        .with_input(tx_input)
-        .with_value(data_fee);
+    if !config.deploy_only {
+        let tx_input = ArbWasm::activateProgramCall { program }.abi_encode();
+        let tx = TransactionRequest::default()
+            .with_from(sender)
+            .with_to(ARB_WASM_ADDRESS)
+            .with_input(tx_input)
+            .with_value(data_fee);
 
-    if is_activated(&tx, &provider).await? {
-        println!("{}", "wasm already activated!".bright_green());
-        return Ok(program);
+        if is_activated(&tx, &provider, &Default::default()).await? {
+            println!("{}", "wasm already activated!".bright_green());
+            return Ok(program);
+        }
+
+        println!("activating contract: {}", program);
+        let receipt = provider.send_transaction(tx).await?.get_receipt().await?;
+
+        let gas = format_gas(U256::from(receipt.gas_used));
+        println!("activated with {gas}");
+        println!(
+            "activation tx hash: {}",
+            receipt.transaction_hash.bright_magenta()
+        );
     }
-
-    let receipt = provider.send_transaction(tx).await?.get_receipt().await?;
-
-    let gas = format_gas(U256::from(receipt.gas_used));
-    println!("activated with {gas}");
-    println!(
-        "activation tx hash: {}",
-        receipt.transaction_hash.bright_magenta()
-    );
 
     Ok(program)
 }
+
+pub const ONE_ETH_WEI: U256 = U256::from_limbs([1000000000000000000, 0, 0, 0]);
+const DEFAULT_DATA_FEE: U256 = ONE_ETH_WEI;
 
 async fn get_activation_fee<P, T>(
     runtime: &[u8],
@@ -134,6 +142,10 @@ where
         .with_input(tx_input)
         .with_value(parse_ether("1").unwrap());
 
+    if is_activated(&tx, &provider, &overrides).await? {
+        return Ok(DEFAULT_DATA_FEE);
+    }
+
     let output = provider.call(&tx).overrides(&overrides).await?;
     let ArbWasm::activateProgramReturn { dataFee, .. } =
         ArbWasm::activateProgramCall::abi_decode_returns(&output, true)?;
@@ -141,39 +153,56 @@ where
     Ok(dataFee)
 }
 
-async fn is_activated<P, T>(tx: &TransactionRequest, provider: &P) -> eyre::Result<bool>
+async fn is_activated<P, T>(
+    tx: &TransactionRequest,
+    provider: &P,
+    overrides: &StateOverride,
+) -> eyre::Result<bool>
 where
     P: Provider<T>,
     T: Transport + Clone,
 {
-    let output = provider.call(tx).await;
-    if let Err(e) = output {
-        let Some(payload) = e.as_error_resp() else {
-            bail!("transport error {e}");
-        };
-        let Some(ref raw_value) = payload.data else {
-            bail!("transport error {e}");
-        };
-        let bytes = raw_value.get();
-        let bytes: [u8; 4] = FromHex::from_hex(bytes.trim_matches('"'))?;
+    match provider.call(tx).overrides(overrides).await {
+        Ok(_) => Ok(false),
+        Err(e) => {
+            let raw_value = e
+                .as_error_resp()
+                .map(|payload| payload.data.clone())
+                .flatten()
+                .ok_or_eyre("transport error")?;
+            let bytes: [u8; 4] = FromHex::from_hex(raw_value.get().trim_matches('"'))?;
 
-        use ArbWasm::ArbWasmErrors as Errors;
-        let error = Errors::abi_decode(&bytes, true).wrap_err("unknown ArbWasm error")?;
-        match error {
-            Errors::ProgramNotWasm(_) => bail!("not a Stylus program"),
-            Errors::ProgramNotActivated(_)
-            | Errors::ProgramNeedsUpgrade(_)
-            | Errors::ProgramExpired(_) => {
-                return Ok(false);
+            use ArbWasm::ArbWasmErrors as Errors;
+            match Errors::abi_decode(&bytes, true).wrap_err("unknown ArbWasm error")? {
+                Errors::ProgramExpired(_) => Ok(false),
+                Errors::ProgramNotWasm(_) => bail!("not a Stylus program"),
+                Errors::ProgramUpToDate(_) => Ok(true),
+                Errors::ProgramNotActivated(_) => Ok(false),
+                Errors::ProgramNeedsUpgrade(_) => Ok(false),
+                Errors::ProgramKeepaliveTooSoon(_) => bail!("unexpected ArbWasm error"),
+                Errors::ProgramInsufficientValue(_) => bail!("unexpected ArbWasm error"),
             }
-            Errors::ProgramUpToDate(_) => {
-                return Ok(true);
-            }
-            Errors::ProgramKeepaliveTooSoon(_) | Errors::ProgramInsufficientValue(_) => {
-                bail!("unexpected ArbWasm error");
-            }
-        };
+        }
     }
-
-    Ok(false)
 }
+
+// async fn get_activation_fee<P, T>(
+//     runtime: &[u8],
+//     provider: &P,
+//     sender: Address,
+// ) -> eyre::Result<U256>
+// where
+//     P: Provider<T>,
+//     T: Transport + Clone,
+// {
+//     if is_activated(&tx, &provider).await? {
+//         return Ok(DEFAULT_DATA_FEE);
+//     }
+//
+//     let output = provider.call(&tx).overrides(&overrides).await?;
+//     let ArbWasm::activateProgramReturn { dataFee, .. } =
+//         ArbWasm::activateProgramCall::abi_decode_returns(&output, true)?;
+//
+//     Ok(dataFee)
+// }
+//

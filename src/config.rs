@@ -62,6 +62,9 @@ pub struct Deploy {
     /// Arbitrum RPC endpoint.
     #[arg(short = 'e', long, default_value = STYLUS_TESTNET_RPC)]
     pub endpoint: String,
+    /// Whether to send only the deployment tx. Activation tx will be skipped.
+    #[arg(long)]
+    pub deploy_only: bool,
 }
 
 impl Deploy {
