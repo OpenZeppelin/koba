@@ -52,7 +52,12 @@ pub async fn deploy(config: &Deploy) -> eyre::Result<Address> {
     let wasm_path = &config.generate_config.wasm;
     let legacy = config.generate_config.legacy;
     let runtime = wasm::compress(wasm_path, legacy).wrap_err("failed to compress wasm")?;
-    let fee = get_activation_fee(&runtime, &provider, sender).await?;
+
+    let fee = if config.deploy_only {
+        ONE_ETH_WEI
+    } else {
+        get_activation_fee(&runtime, &provider, sender).await?
+    };
 
     // Give some leeway so that activation doesn't fail -- it'll get refunded
     // anyways.
