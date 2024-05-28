@@ -110,8 +110,13 @@ success!
 
 ## Limitations
 
-`koba` currently does not support Solidity's `immutable` variables, since there
-is no equivalent mechanism for Stylus.
+- `immutable` variables - `koba` currently does not support Solidity's
+  `immutable` variables, since there is no equivalent mechanism for Stylus.
+- `MCOPY` - Version [`0.8.24`][mcopy] of Solidity introduced the `MCOPY` opcode
+  from `EIP-5656`. As of 2024-05-28, `nitro-testnode` does not support this
+  opcode.
+
+[mcopy]: https://github.com/ethereum/solidity/releases/tag/v0.8.24
 
 ## Why koba
 
