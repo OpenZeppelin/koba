@@ -24,7 +24,7 @@ impl Generate {
 
     fn generate(&self) -> eyre::Result<Vec<u8>> {
         let evmasm = solidity::assembly(&self.sol)?;
-        let wasm = wasm::compress(&self.wasm)?;
+        let wasm = wasm::compress(&self.wasm, self.legacy)?;
         let asm = assembler::assemble(&evmasm, &wasm)?;
         let args = self.args()?;
 

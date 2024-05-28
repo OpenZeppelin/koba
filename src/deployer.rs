@@ -50,7 +50,8 @@ pub async fn deploy(config: &Deploy) -> eyre::Result<Address> {
         .on_http(rpc_url);
 
     let wasm_path = &config.generate_config.wasm;
-    let runtime = wasm::compress(wasm_path).wrap_err("failed to compress wasm")?;
+    let legacy = config.generate_config.legacy;
+    let runtime = wasm::compress(wasm_path, legacy).wrap_err("failed to compress wasm")?;
     let fee = get_activation_fee(&runtime, &provider, sender).await?;
 
     // Give some leeway so that activation doesn't fail -- it'll get refunded
@@ -169,7 +170,8 @@ where
                 .as_error_resp()
                 .map(|payload| payload.data.clone())
                 .flatten()
-                .ok_or_eyre("transport error")?;
+                .ok_or_eyre(format!("{e}"))
+                .wrap_err("could not check if the contract is activated")?;
             let bytes: [u8; 4] = FromHex::from_hex(raw_value.get().trim_matches('"'))?;
 
             use ArbWasm::ArbWasmErrors as Errors;
@@ -185,24 +187,3 @@ where
         }
     }
 }
-
-// async fn get_activation_fee<P, T>(
-//     runtime: &[u8],
-//     provider: &P,
-//     sender: Address,
-// ) -> eyre::Result<U256>
-// where
-//     P: Provider<T>,
-//     T: Transport + Clone,
-// {
-//     if is_activated(&tx, &provider).await? {
-//         return Ok(DEFAULT_DATA_FEE);
-//     }
-//
-//     let output = provider.call(&tx).overrides(&overrides).await?;
-//     let ArbWasm::activateProgramReturn { dataFee, .. } =
-//         ArbWasm::activateProgramCall::abi_decode_returns(&output, true)?;
-//
-//     Ok(dataFee)
-// }
-//

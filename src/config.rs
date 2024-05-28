@@ -48,6 +48,9 @@ pub struct Generate {
     /// ABI-encoded constructor arguments.
     #[arg(long)]
     pub args: Option<String>,
+    /// Whether to support the Stylus v1 testnet.
+    #[arg(long)]
+    pub legacy: bool,
 }
 
 const STYLUS_TESTNET_RPC: &str = "https://stylusv2.arbitrum.io/rpc";
