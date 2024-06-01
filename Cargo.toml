@@ -2,7 +2,7 @@
 name = "koba"
 version = "0.1.0"
 edition = "2021"
-authors = ["Alexander Gonzalez <alexfertel97@gmail.com>"]
+authors = ["OpenZeppelin Community <maintainers@openzeppelin.org>"]
 
 [dependencies]
 brotli2 = "0.3.2"
