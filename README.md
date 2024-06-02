@@ -11,6 +11,31 @@ Generate deployment transaction data for Stylus contracts.
 > by either `cargo-stylus` itself or in the Stylus VM. As such, we maintain this
 > on a best-effort basis.
 
+## Why?
+
+Deployment transactions in Ethereum are composed of three sections:
+
+- A `prelude` - The bytecode prefix whose execution gets triggered by the
+  deployment transaction.
+- A `runtime` - The bytecode of the smart contract stored on-chain.
+- Constructor arguments - ABI-encoded arguments received by the constructor.
+
+Deployment transactions with an input of only compressed wasm are not yet
+supported in Stylus. That is, only the `runtime` is actual webassembly.
+
+Moreover, the prelude of deployment transactions using `cargo-stylus` is
+[hard-coded].
+
+`koba` allows using a Solidity constructor alongside Stylus contracts, enabling
+users to deploy their code in a familiar way.
+
+`koba` can be used both as a CLI tool or as a library in Rust projects. For a
+usage example beyond the section below, check out
+[OpenZeppelin Contracts for Stylus][stylus contracts].
+
+[hard-coded]: https://github.com/OffchainLabs/cargo-stylus/blob/be9faca7720b534de7ec210fa5a071eae79824ec/check/src/deploy.rs#L102-L114
+[stylus contracts]: https://github.com/OpenZeppelin/rust-contracts-stylus
+
 ## Installation
 
 To install `koba` on your machine, just run `cargo install koba`. Compiling
@@ -120,5 +145,5 @@ success!
 
 ## Why koba
 
-`koba` means [factory](https://jisho.org/search/%E5%B7%A5%E5%A0%B4) in japanese
+`koba` means [factory](https://jisho.org/search/%E5%B7%A5%E5%A0%B4) in Japanese
 -- the factory where a stylus gets assembled.
