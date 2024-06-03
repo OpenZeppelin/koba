@@ -38,12 +38,17 @@ usage example beyond the section below, check out
 
 ## Installation
 
-To install `koba` on your machine, just run `cargo install koba`. Compiling
-Solidity code with `koba` requires `solc` to be installed and available through
-the command line.
+To install `koba` on your machine, just run:
+
+```terminal
+cargo install --git https://github.com/OpenZeppelin/koba
+```
+
+Compiling Solidity code with `koba` requires `solc` to be installed and
+available through the command line.
 
 You can also use `koba` as a library by adding it to your project using
-`cargo add koba`.
+`cargo add --git https://github.com/OpenZeppelin/koba`.
 
 ## Usage
 
