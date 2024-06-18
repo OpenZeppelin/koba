@@ -18,16 +18,15 @@ regex = "1.10.4"
 tempfile = "3.10.1"
 tokio = { version = "1.37.0", features = ["macros", "rt-multi-thread"] }
 wasmer = "3.1.0"
-alloy = { git = "https://github.com/alloy-rs/alloy", rev = "c6c91cc", features = [
+alloy = { version = "0.1.1", features = [
   "contract",
   "network",
   "providers",
   "provider-http",
   "rpc-client",
   "rpc-types-eth",
-  "signers",
   "signer-keystore",
-  "signer-wallet",
+  "signer-local",
   "getrandom",
 ] }
 owo-colors = "4.0.0"

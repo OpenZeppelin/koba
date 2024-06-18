@@ -1,6 +1,6 @@
 use alloy::{
     hex::FromHex,
-    network::{EthereumSigner, ReceiptResponse, TransactionBuilder},
+    network::{EthereumWallet, ReceiptResponse, TransactionBuilder},
     primitives::{utils::parse_ether, Address, Bytes, U256},
     providers::{Provider, ProviderBuilder},
     rpc::types::eth::{
@@ -46,7 +46,7 @@ pub async fn deploy(config: &Deploy) -> eyre::Result<Address> {
     let rpc_url = config.endpoint.parse()?;
     let provider = ProviderBuilder::new()
         .with_recommended_fillers()
-        .signer(EthereumSigner::from(signer))
+        .wallet(EthereumWallet::from(signer))
         .on_http(rpc_url);
 
     let wasm_path = &config.generate_config.wasm;
