@@ -1,8 +1,17 @@
 [package]
 name = "koba"
 version = "0.1.0"
-edition = "2021"
 authors = ["OpenZeppelin Community <maintainers@openzeppelin.org>"]
+license = "MIT"
+edition = "2021"
+readme = "README.md"
+repository = "https://github.com/OpenZeppelin/koba"
+homepage = "https://github.com/OpenZeppelin/koba"
+documentation = "https://github.com/OpenZeppelin/koba"
+description = """
+Deploy Stylus contracts with Solidity constructors
+"""
+keywords = ["rust", "ethereum", "arbitrum", "stylus", "deployment"]
 
 [dependencies]
 brotli2 = "0.3.2"
