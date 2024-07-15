@@ -68,13 +68,19 @@ pub struct Deploy {
     /// Whether to send only the deployment tx. Activation tx will be skipped.
     #[arg(long)]
     pub deploy_only: bool,
+    /// Whether to print progress messages during execution.
+    #[arg(short = 'q', long, default_value_t = false)]
+    pub quiet: bool,
 }
 
 impl Deploy {
     pub fn run(&self) -> eyre::Result<()> {
         let runtime = Builder::new_multi_thread().enable_all().build()?;
         let _address = runtime.block_on(deploy(self))?;
-        println!("{}", "success!".bright_green());
+
+        if !self.quiet {
+            println!("{}", "success!".bright_green());
+        }
         Ok(())
     }
 }
