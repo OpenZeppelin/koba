@@ -66,7 +66,9 @@ pub async fn deploy(config: &Deploy) -> eyre::Result<Address> {
 
     let status = get_activation_fee(&runtime, &provider, sender).await?;
     if let Status::Created(fee) = status {
-        println!("{:?}", fee);
+        if !config.quiet {
+            println!("{:?}", fee);
+        }
     }
 
     if !config.deploy_only {
