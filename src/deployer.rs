@@ -54,7 +54,7 @@ pub async fn deploy(config: &Deploy) -> eyre::Result<Address> {
     let runtime = wasm::compress(wasm_path, legacy).wrap_err("failed to compress wasm")?;
 
     let fee = if config.deploy_only {
-        ONE_ETH_WEI
+        ONE_ETH_WEI // This is fine, cause we won't activate anyways.
     } else {
         get_activation_fee(&runtime, &provider, sender).await?
     };
@@ -140,6 +140,12 @@ where
     };
     let mut overrides = StateOverride::default();
     overrides.insert(program, account_override);
+
+    let sender_override = AccountOverride {
+        balance: Some(U256::MAX),
+        ..Default::default()
+    };
+    overrides.insert(sender, sender_override);
 
     let tx_input = ArbWasm::activateProgramCall { program }.abi_encode();
     let tx = TransactionRequest::default()
