@@ -44,7 +44,7 @@ pub struct Generate {
     pub wasm: PathBuf,
     /// Path to the contract's Solidity constructor code.
     #[arg(long)]
-    pub sol: PathBuf,
+    pub sol: Option<PathBuf>,
     /// ABI-encoded constructor arguments.
     #[arg(long)]
     pub args: Option<String>,
