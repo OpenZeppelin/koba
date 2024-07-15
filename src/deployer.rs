@@ -39,6 +39,17 @@ sol! {
     }
 }
 
+pub enum Status {
+    Created(U256),
+    Activated,
+}
+
+fn get_data_fee(fee: U256) -> U256 {
+    // Give some leeway so that activation doesn't fail -- it'll get refunded
+    // anyways.
+    fee * U256::from(120) / U256::from(100)
+}
+
 pub async fn deploy(config: &Deploy) -> eyre::Result<Address> {
     let signer = config.auth.wallet()?;
     let sender = signer.address();
@@ -53,34 +64,37 @@ pub async fn deploy(config: &Deploy) -> eyre::Result<Address> {
     let legacy = config.generate_config.legacy;
     let runtime = wasm::compress(wasm_path, legacy).wrap_err("failed to compress wasm")?;
 
-    let fee = if config.deploy_only {
-        ONE_ETH_WEI // This is fine, cause we won't activate anyways.
-    } else {
-        get_activation_fee(&runtime, &provider, sender).await?
-    };
+    let status = get_activation_fee(&runtime, &provider, sender).await?;
+    if let Status::Created(fee) = status {
+        println!("{:?}", fee);
+    }
 
-    // Give some leeway so that activation doesn't fail -- it'll get refunded
-    // anyways.
-    let data_fee = fee * U256::from(120) / U256::from(100);
-    let visual_fee = format_data_fee(fee).unwrap_or("???".red().to_string());
-    if !config.deploy_only && fee != DEFAULT_DATA_FEE {
-        println!("wasm data fee: {}", visual_fee);
+    if !config.deploy_only {
+        if let Status::Created(fee) = status {
+            let data_fee = get_data_fee(fee);
+            let visual_fee = format_data_fee(fee).unwrap_or("???".red().to_string());
+            if !config.quiet {
+                println!("wasm data fee: {}", visual_fee);
+            }
 
-        let balance = provider.get_balance(sender).await?;
-        if balance < data_fee {
-            bail!(
-                "not enough funds in account {} to pay for data fee\n\
+            let balance = provider.get_balance(sender).await?;
+            if balance < data_fee {
+                bail!(
+                    "not enough funds in account {} to pay for data fee\n\
                  balance {} < {}\n",
-                sender.red(),
-                balance.red(),
-                format!("{data_fee} wei").red(),
-            );
+                    sender.red(),
+                    balance.red(),
+                    format!("{data_fee} wei").red(),
+                );
+            }
         }
     }
 
     let asm = crate::generate(&config.generate_config)?;
-    println!("init code size: {}", format_file_size(asm.len(), 20, 28));
-    println!("deploying to RPC: {}", &config.endpoint.bright_magenta());
+    if !config.quiet {
+        println!("init code size: {}", format_file_size(asm.len(), 20, 28));
+        println!("deploying to RPC: {}", &config.endpoint.bright_magenta());
+    }
 
     let tx = TransactionRequest::default().into_create().with_input(asm);
     let receipt = provider.send_transaction(tx).await?.get_receipt().await?;
@@ -88,47 +102,57 @@ pub async fn deploy(config: &Deploy) -> eyre::Result<Address> {
         .contract_address()
         .wrap_err("failed to read contract address from tx receipt")?;
 
-    println!("deployed code: {}", program.bright_purple());
-    println!(
-        "deployment tx hash: {}",
-        receipt.transaction_hash.bright_magenta()
-    );
-
-    if !config.deploy_only {
-        let tx_input = ArbWasm::activateProgramCall { program }.abi_encode();
-        let tx = TransactionRequest::default()
-            .with_from(sender)
-            .with_to(ARB_WASM_ADDRESS)
-            .with_input(tx_input)
-            .with_value(data_fee);
-
-        if is_activated(&tx, &provider, &Default::default()).await? {
-            println!("{}", "wasm already activated!".bright_green());
-            return Ok(program);
-        }
-
-        println!("activating contract: {}", program);
-        let receipt = provider.send_transaction(tx).await?.get_receipt().await?;
-
-        let gas = format_gas(U256::from(receipt.gas_used));
-        println!("activated with {gas}");
+    if !config.quiet {
+        println!("deployed code: {}", program.bright_purple());
         println!(
-            "activation tx hash: {}",
+            "deployment tx hash: {}",
             receipt.transaction_hash.bright_magenta()
         );
+    }
+
+    if !config.deploy_only {
+        if let Status::Created(fee) = status {
+            // Give some leeway so that activation doesn't fail -- it'll get refunded
+            // anyways.
+            let data_fee = get_data_fee(fee);
+            let tx_input = ArbWasm::activateProgramCall { program }.abi_encode();
+            let tx = TransactionRequest::default()
+                .with_from(sender)
+                .with_to(ARB_WASM_ADDRESS)
+                .with_input(tx_input)
+                .with_value(data_fee);
+
+            if is_activated(&tx, &provider, &Default::default()).await? {
+                if !config.quiet {
+                    println!("{}", "wasm already activated!".bright_green());
+                }
+                return Ok(program);
+            }
+
+            if !config.quiet {
+                println!("activating contract: {}", program);
+            }
+            let receipt = provider.send_transaction(tx).await?.get_receipt().await?;
+
+            let gas = format_gas(U256::from(receipt.gas_used));
+            if !config.quiet {
+                println!("activated with {gas}");
+                println!(
+                    "activation tx hash: {}",
+                    receipt.transaction_hash.bright_magenta()
+                );
+            }
+        }
     }
 
     Ok(program)
 }
 
-pub const ONE_ETH_WEI: U256 = U256::from_limbs([1000000000000000000, 0, 0, 0]);
-const DEFAULT_DATA_FEE: U256 = ONE_ETH_WEI;
-
 async fn get_activation_fee<P, T>(
     runtime: &[u8],
     provider: &P,
     sender: Address,
-) -> eyre::Result<U256>
+) -> eyre::Result<Status>
 where
     P: Provider<T>,
     T: Transport + Clone,
@@ -155,14 +179,14 @@ where
         .with_value(parse_ether("1").unwrap());
 
     if is_activated(&tx, &provider, &overrides).await? {
-        return Ok(DEFAULT_DATA_FEE);
+        return Ok(Status::Activated);
     }
 
     let output = provider.call(&tx).overrides(&overrides).await?;
     let ArbWasm::activateProgramReturn { dataFee, .. } =
         ArbWasm::activateProgramCall::abi_decode_returns(&output, true)?;
 
-    Ok(dataFee)
+    Ok(Status::Created(dataFee))
 }
 
 async fn is_activated<P, T>(
