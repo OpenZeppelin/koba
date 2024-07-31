@@ -11,6 +11,7 @@ use alloy::{
     sol_types::{SolCall, SolInterface},
     transports::Transport,
 };
+use alloy::rpc::types::TransactionReceipt;
 use eyre::{bail, Context, ContextCompat, OptionExt};
 use owo_colors::OwoColorize;
 
@@ -50,7 +51,7 @@ fn get_data_fee(fee: U256) -> U256 {
     fee * U256::from(120) / U256::from(100)
 }
 
-pub async fn deploy(config: &Deploy) -> eyre::Result<Address> {
+pub async fn deploy(config: &Deploy) -> eyre::Result<TransactionReceipt> {
     let signer = config.auth.wallet()?;
     let sender = signer.address();
 
@@ -128,7 +129,7 @@ pub async fn deploy(config: &Deploy) -> eyre::Result<Address> {
                 if !config.quiet {
                     println!("{}", "wasm already activated!".bright_green());
                 }
-                return Ok(program);
+                return Ok(receipt);
             }
 
             if !config.quiet {
@@ -147,7 +148,7 @@ pub async fn deploy(config: &Deploy) -> eyre::Result<Address> {
         }
     }
 
-    Ok(program)
+    Ok(receipt)
 }
 
 async fn get_activation_fee<P, T>(
