@@ -15,7 +15,8 @@ pub fn assembly(sol_path: impl AsRef<Path>) -> eyre::Result<String> {
         .output()?;
     let code = String::from_utf8_lossy(&output.stdout);
     if code.is_empty() {
-        bail!("failed to compile the constructor");
+        let err = String::from_utf8_lossy(&output.stderr);
+        bail!("failed to compile the constructor:\n{err}");
     }
 
     let code = code
