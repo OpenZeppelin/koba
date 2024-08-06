@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.0] - 2024-08-06
+
+### Features
+
+- *(deploy)* Return deployment transaction receipt (#9)
+
+
 ## [0.1.2] - 2024-07-15
 
 ### Bug Fixes
