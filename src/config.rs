@@ -53,7 +53,7 @@ pub struct Generate {
     pub legacy: bool,
 }
 
-const STYLUS_TESTNET_RPC: &str = "https://stylusv2.arbitrum.io/rpc";
+const STYLUS_TESTNET_RPC: &str = "https://sepolia-rollup.arbitrum.io/rpc";
 
 /// Deploy & activate a Stylus contract.
 #[derive(Parser, Debug)]
