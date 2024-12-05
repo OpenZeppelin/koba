@@ -1,3 +1,4 @@
+use alloy::rpc::types::TransactionReceipt;
 use alloy::{
     hex::FromHex,
     network::{EthereumWallet, ReceiptResponse, TransactionBuilder},
@@ -11,7 +12,6 @@ use alloy::{
     sol_types::{SolCall, SolInterface},
     transports::Transport,
 };
-use alloy::rpc::types::TransactionReceipt;
 use eyre::{bail, Context, ContextCompat, OptionExt};
 use owo_colors::OwoColorize;
 
@@ -206,8 +206,7 @@ where
         Err(e) => {
             let raw_value = e
                 .as_error_resp()
-                .map(|payload| payload.data.clone())
-                .flatten()
+                .and_then(|payload| payload.data.clone())
                 .ok_or_eyre(format!("{e}"))
                 .wrap_err("could not check if the contract is activated")?;
             let bytes: [u8; 4] = FromHex::from_hex(raw_value.get().trim_matches('"'))?;
