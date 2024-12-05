@@ -238,7 +238,7 @@ mod tests {
   0x00
   return
   stop
-  
+
 sub_0: assembly {
   auxdata: 0x00
 }"##;

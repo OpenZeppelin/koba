@@ -26,10 +26,10 @@ impl Generate {
     fn generate(&self) -> eyre::Result<Vec<u8>> {
         // User intends to deploy without constructor.
         if self.sol.is_none() {
-            return Ok(self.plain_codegen()?);
+            return self.plain_codegen();
         }
 
-        let evmasm = solidity::assembly(&self.sol.clone().unwrap())?;
+        let evmasm = solidity::assembly(self.sol.clone().unwrap())?;
         let wasm = wasm::compress(&self.wasm, self.legacy)?;
         let asm = assembler::assemble(&evmasm, &wasm)?;
         let args = self.args()?;
