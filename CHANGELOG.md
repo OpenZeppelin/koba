@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0] - 2024-12-05
+
+### Changed (Breaking)
+
+- *(build)* Bump alloy to v0.7.12
+
 ## [0.2.0] - 2024-08-06
 
 ### Features
@@ -20,7 +26,7 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
-- Set inifinite balance when computing activation fee
+- Set infinite balance when computing activation fee
 
 
 ### Features
@@ -73,5 +79,3 @@ All notable changes to this project will be documented in this file.
 ### Build
 
 - Use the published version of alloy
-
-
