@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.0] - 2025-02-25
+
+### Changed (Breaking)
+
+- *(build)* Bump alloy to v0.11.1
+
 ## [0.3.0] - 2024-12-05
 
 ### Changed (Breaking)
